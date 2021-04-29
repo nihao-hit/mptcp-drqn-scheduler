@@ -39,7 +39,7 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("MptcpDrqnSchedulerTopo");
 
-// // trace节点移动
+// // trace sta移动
 // static void 
 // CourseChange (std::string context, Ptr<const MobilityModel> mobility)
 // {
@@ -49,6 +49,7 @@ NS_LOG_COMPONENT_DEFINE("MptcpDrqnSchedulerTopo");
 //             << ";\tVEL: x=" << vel.x << ",\ty=" << vel.y << std::endl;
 // }
 
+// trace sta关联ap事件
 static void
 Assoc(std::string context, Mac48Address value) { 
     ////////////////////////////////////////
@@ -63,8 +64,7 @@ Assoc(std::string context, Mac48Address value) {
     uint32_t ssid = atoi(context.substr (23, 1).c_str()) + 1;
     Ptr<StaWifiMac> mac = (ssid == 1) ? ssid1Mac : ssid2Mac;
     // TODO: 运行时打印出来的mac地址有点奇怪，:01有时是:01，有时是:10。
-    std::cout<<Simulator::Now()<<",\tAssoc: ssid_"<<ssid<<",\tpos="<<pos
-             <<",\tStaMac="<<mac->GetAddress()<<",\tapMac?="<<value<<",\tbssid="<<mac->GetBssid()<<std::endl;
+    NS_LOG_DEBUG(Simulator::Now()<<",\t  Assoc: ssid_"<<ssid<<",\tPos="<<pos<<",\tBssid="<<value);
     // 打印关联信息，坐标
     ////////////////////////////////////////
 
@@ -79,7 +79,7 @@ Assoc(std::string context, Mac48Address value) {
     for(uint32_t rtIdx = 0; rtIdx < staRouting->GetNRoutes(); rtIdx++) {
         Ipv4RoutingTableEntry rt = staRouting->GetRoute(rtIdx);
         if(rt.GetInterface() == ssid && rt.GetGateway() != Ipv4Address("0.0.0.0")) {
-            NS_LOG_DEBUG("Deleted route entry: "<<rt);
+            // NS_LOG_DEBUG("Deleted route entry: "<<rt);
             staRouting->RemoveRoute(rtIdx);
         }
     }
@@ -98,7 +98,7 @@ Assoc(std::string context, Mac48Address value) {
     std::string apIpStr = "10.0." + std::to_string(ssid) + "." +
         std::to_string(apMac8Int + ((ssid == 1) ? -1 : -11));
     Ipv4Address apIp(apIpStr.c_str());
-    NS_LOG_DEBUG("Added route entry: host="<<Ipv4Address("10.0.3.2")<<", out="<<ssid<<", next hop="<<apIp);
+    // NS_LOG_DEBUG("Added route entry: host="<<Ipv4Address("10.0.3.2")<<", out="<<ssid<<", next hop="<<apIp);
     staRouting->AddHostRouteTo(Ipv4Address("10.0.3.2"), apIp, ssid);
     // // 如果接口是ssid1StaDevice，添加default route
     // if(ssid == 1) {
@@ -108,31 +108,37 @@ Assoc(std::string context, Mac48Address value) {
     ////////////////////////////////////////
 }
 
+// trace sta解关联ap事件
 static void
 DeAssoc(std::string context, Mac48Address value) {
     Ptr<Node> sta = NodeList::GetNode(0);
     Ptr<MobilityModel> mobility = sta->GetObject<MobilityModel>();
     Vector pos = mobility->GetPosition ();
     uint32_t ssid = atoi(context.substr (23, 1).c_str()) + 1;
-    std::cout<<Simulator::Now()<<",\tDeAassoc: ssid_"<<ssid<<",\tpos="<<pos<<",\tmac="<<value<<std::endl;
+    NS_LOG_DEBUG(Simulator::Now()<<",\tDeAssoc: ssid_"<<ssid<<",\tPos="<<pos<<",\tBssid="<<value);
+}
+
+// trace sta接口rate
+static void
+Rate(std::string context, uint64_t oldValue, uint64_t newValue){
+    uint32_t ssid = atoi(context.substr (23, 1).c_str()) + 1;
+    NS_LOG_DEBUG(Simulator::Now()<<"ssid_"<<ssid<<",\toldRate="<<oldValue<<",\tnewRate"<<newValue);
 }
 
 int main(int argc, char *argv[])
 {
     ////////////////////////////////////////////////////////////////////////////////
     // 命令行参数及全局配置
-    // LogComponentEnable("UdpEchoServerApplication", LOG_LEVEL_INFO);
-    // LogComponentEnable("UdpEchoClientApplication", LOG_LEVEL_INFO);
     LogComponentEnable("MptcpDrqnSchedulerTopo", LOG_DEBUG);
-    LogComponentEnable("V4Ping", LOG_LEVEL_INFO);
 
     // Set the maximum wireless range to 30 meters
     Config::SetDefault("ns3::RangePropagationLossModel::MaxRange", DoubleValue(30));
 
+    // TODO: 不知道为什么，ssid1与ssid2在每一秒都会发生一次漫游，不论如何降低速度。
     // 配置移动模型
     Config::SetDefault ("ns3::RandomWalk2dMobilityModel::Mode", StringValue ("Time"));
-    Config::SetDefault ("ns3::RandomWalk2dMobilityModel::Time", StringValue ("5s"));
-    Config::SetDefault ("ns3::RandomWalk2dMobilityModel::Speed", StringValue ("ns3::UniformRandomVariable[Min=2.0|Max=4.0]"));
+    Config::SetDefault ("ns3::RandomWalk2dMobilityModel::Time", StringValue ("15s"));
+    Config::SetDefault ("ns3::RandomWalk2dMobilityModel::Speed", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=2.0]"));
     Config::SetDefault ("ns3::RandomWalk2dMobilityModel::Bounds", StringValue ("0|120|0|120"));
     // 命令行参数及全局配置
     ////////////////////////////////////////////////////////////////////////////////
@@ -175,14 +181,6 @@ int main(int argc, char *argv[])
     NetDeviceContainer ssid2StaDevice;
     NetDeviceContainer ssid2ApWifiDevices;
     // TODO: sta在离开当前关联ap的范围才会断开连接
-    // ssid1 ap channel list
-    std::vector<int> ssid1ChannelList{1, 6, 11,
-                                      11, 1, 6,
-                                      1, 6, 11};
-    // ssid2 ap channel list
-    std::vector<int> ssid2ChannelList{36, 40, 44, 48,
-                                      44, 48, 36, 40,
-                                      36, 40, 44, 48};
     // Create a channel helper and phy helper, and then create the channel
     YansWifiChannelHelper channel = YansWifiChannelHelper::Default();
     channel.AddPropagationLoss("ns3::RangePropagationLossModel");
@@ -190,14 +188,11 @@ int main(int argc, char *argv[])
     phy.SetPcapDataLinkType(YansWifiPhyHelper::DLT_IEEE802_11_RADIO);
     phy.SetChannel(channel.Create());
     // Create a WifiMacHelper, which is reused across STA and AP configurations
-    HtWifiMacHelper mac = HtWifiMacHelper::Default();
+    NqosWifiMacHelper mac = NqosWifiMacHelper::Default();
     // Create a WifiHelper, which will use the above helpers to create
     // and install Wifi devices.  Configure a Wifi standard to use, which
     // will align various parameters in the Phy and Mac to standard defaults.
     WifiHelper wifi = WifiHelper::Default();
-    // 默认的ArfWifiManager不支持802.11n
-    // msg="WifiRemoteStationManager selected does not support HT rates", +0.000000000s 0 file=../src/wifi/model/arf-wifi-manager.cc, line=92
-    // wifi.SetRemoteStationManager("ns3::MinstrelHtWifiManager");
     // Configure mobility
     MobilityHelper mobility;
     Ssid ssid;
@@ -206,7 +201,6 @@ int main(int argc, char *argv[])
 
     ////////////////////////////////////////
     // 为sta添加ssid1 sta wifi device
-    wifi.SetStandard(WIFI_PHY_STANDARD_80211n_2_4GHZ);
     // Perform the installation
     ssid = Ssid("ssid_1");
     mac.SetType("ns3::StaWifiMac",
@@ -215,7 +209,6 @@ int main(int argc, char *argv[])
     ssid1StaDevice = wifi.Install(phy, mac, sta);
     
     // 为sta添加ssid2 sta wifi device
-    wifi.SetStandard(WIFI_PHY_STANDARD_80211n_5GHZ);
     // Perform the installation
     ssid = Ssid("ssid_2");
     mac.SetType("ns3::StaWifiMac",
@@ -244,9 +237,7 @@ int main(int argc, char *argv[])
                                   "LayoutType", StringValue("RowFirst"));
     for (uint32_t i = 0; i < ssid1ApNodes.GetN(); i++)
     {
-        wifi.SetStandard(WIFI_PHY_STANDARD_80211n_2_4GHZ);
         // Perform the installation
-        phy.Set("ChannelNumber", UintegerValue(ssid1ChannelList[i]));
         mac.SetType("ns3::ApWifiMac",
                     "Ssid", SsidValue(ssid));
         ssid1ApWifiDevices.Add(wifi.Install(phy, mac, ssid1ApNodes.Get(i)));
@@ -268,9 +259,7 @@ int main(int argc, char *argv[])
                                   "LayoutType", StringValue("RowFirst"));
     for (uint32_t i = 0; i < ssid2ApNodes.GetN(); i++)
     {
-        wifi.SetStandard(WIFI_PHY_STANDARD_80211n_5GHZ);
         // Perform the installation
-        phy.Set("ChannelNumber", UintegerValue(ssid2ChannelList[i]));
         mac.SetType("ns3::ApWifiMac",
                     "Ssid", SsidValue(ssid));
         ssid2ApWifiDevices.Add(wifi.Install(phy, mac, ssid2ApNodes.Get(i)));
@@ -463,20 +452,6 @@ int main(int argc, char *argv[])
 
     ////////////////////////////////////////////////////////////////////////////////
     // 设置应用层流量
-    // UdpEchoServerHelper echoServer(9);
-    // ApplicationContainer serverApps = echoServer.Install(server);
-    // serverApps.Start(Seconds(1.0));
-    // serverApps.Stop(Seconds(60.0));
-
-    // UdpEchoClientHelper echoClient(lan3Intfs.GetAddress(1), 9);
-    // echoClient.SetAttribute("MaxPackets", UintegerValue(50));
-    // echoClient.SetAttribute("Interval", TimeValue(Seconds(1.0)));
-    // echoClient.SetAttribute("PacketSize", UintegerValue(1024));
-
-    // ApplicationContainer clientApps = echoClient.Install(s1);
-    // clientApps.Start(Seconds(2.0));
-    // clientApps.Stop(Seconds(60.0));
-
     V4PingHelper ping ("10.0.3.2");
     ping.SetAttribute ("Interval", TimeValue (Seconds(1.0)));
     ping.SetAttribute ("Size", UintegerValue (1024));
@@ -494,6 +469,8 @@ int main(int argc, char *argv[])
     
     Config::Connect("/NodeList/0/DeviceList/[0-1]/$ns3::WifiNetDevice/Mac/$ns3::StaWifiMac/Assoc", MakeCallback(&Assoc));
     Config::Connect("/NodeList/0/DeviceList/[0-1]/$ns3::WifiNetDevice/Mac/$ns3::StaWifiMac/DeAssoc", MakeCallback(&DeAssoc));
+
+    Config::Connect("/NodeList/0/DeviceList/[0-1]/$ns3::WifiNetDevice/RemoteStationManager/$ns3::ArfWifiManager/Rate", MakeCallback(&Rate));
 
     phy.EnablePcap("MptcpDrqnSchedulerTopo", ssid1StaDevice);
     phy.EnablePcap("MptcpDrqnSchedulerTopo", ssid2StaDevice);
