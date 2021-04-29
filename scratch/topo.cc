@@ -87,8 +87,8 @@ Assoc(std::string context, Mac48Address value) {
 
     // 添加新route entry
     // 这里AddHostRouteTo()的intf参数为什么从1开始？可能0是lo
-    // ssid_1 ap: mac=[3-11], ip=10.0.1.[2-10]
-    // ssid_2 ap: mac=[13-24], ip=10.0.2.[2-13]
+    // ssid_1 ap: mac=[2-10], ip=10.0.1.[2-10]
+    // ssid_2 ap: mac=[12-23], ip=10.0.2.[2-13]
     std::stringstream ss;
     ss<<value;
     // 注意：这里mac地址是16进制，需要转化为10进制
@@ -97,7 +97,7 @@ Assoc(std::string context, Mac48Address value) {
     int apMac8Int = std::strtol(apMac8Str.c_str(), nullptr, 16);
 
     std::string apIpStr = "10.0." + std::to_string(ssid) + "." +
-        std::to_string(apMac8Int + ((ssid == 1) ? -1 : -11));
+        std::to_string(apMac8Int + ((ssid == 1) ? 0 : -10));
     Ipv4Address apIp(apIpStr.c_str());
     // NS_LOG_DEBUG("Added route entry: host="<<Ipv4Address("10.0.3.2")<<", out="<<ssid<<", next hop="<<apIp);
     staRouting->AddHostRouteTo(Ipv4Address("10.0.3.2"), apIp, ssid);
@@ -153,8 +153,6 @@ int main(int argc, char *argv[])
     ////////////////////////////////////////////////////////////////////////////////
 
     ////////////////////////////////////////////////////////////////////////////////
-    // 创建节点并附加wifi，csma接口
-    ////////////////////////////////////////
     // 创建节点
     Ptr<Node> sta = CreateObject<Node>();
     Ptr<Node> s1 = CreateObject<Node>();
@@ -180,64 +178,46 @@ int main(int argc, char *argv[])
     lan3Nodes.Add(router);
     lan3Nodes.Add(server);
     // 创建节点
-    ////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////
 
+    ////////////////////////////////////////////////////////////////////////////////
+    // 初始化ssid1网络，为sta, ssid1Aps附加wifi接口
     ////////////////////////////////////////
     // 初始化wifi helper, mobility helper
     NetDeviceContainer ssid1StaDevice;
     NetDeviceContainer ssid1ApWifiDevices;
-
-    NetDeviceContainer ssid2StaDevice;
-    NetDeviceContainer ssid2ApWifiDevices;
     // TODO: sta在离开当前关联ap的范围才会断开连接
     // Create a channel helper and phy helper, and then create the channel
-    YansWifiChannelHelper channel = YansWifiChannelHelper::Default();
-    channel.AddPropagationLoss("ns3::RangePropagationLossModel");
-    YansWifiPhyHelper phy = YansWifiPhyHelper::Default();
-    phy.SetPcapDataLinkType(YansWifiPhyHelper::DLT_IEEE802_11_RADIO);
-    phy.SetChannel(channel.Create());
+    YansWifiChannelHelper channel1 = YansWifiChannelHelper::Default();
+    channel1.AddPropagationLoss("ns3::RangePropagationLossModel");
+    YansWifiPhyHelper phy1 = YansWifiPhyHelper::Default();
+    phy1.SetPcapDataLinkType(YansWifiPhyHelper::DLT_IEEE802_11_RADIO);
+    phy1.SetChannel(channel1.Create());
     // Create a WifiMacHelper, which is reused across STA and AP configurations
-    NqosWifiMacHelper mac = NqosWifiMacHelper::Default();
+    NqosWifiMacHelper mac1 = NqosWifiMacHelper::Default();
     // Create a WifiHelper, which will use the above helpers to create
     // and install Wifi devices.  Configure a Wifi standard to use, which
     // will align various parameters in the Phy and Mac to standard defaults.
-    WifiHelper wifi = WifiHelper::Default();
+    WifiHelper wifi1 = WifiHelper::Default();
     // Configure mobility
-    MobilityHelper mobility;
-    Ssid ssid;
+    MobilityHelper mobility1;
+    Ssid ssid1 = Ssid("ssid_1");
     // 初始化wifi helper, mobility helper
     ////////////////////////////////////////
 
     ////////////////////////////////////////
     // 为sta添加ssid1 sta wifi device
     // Perform the installation
-    ssid = Ssid("ssid_1");
-    mac.SetType("ns3::StaWifiMac",
-                "Ssid", SsidValue(ssid),
+    mac1.SetType("ns3::StaWifiMac",
+                "Ssid", SsidValue(ssid1),
                 "ActiveProbing", BooleanValue(false));
-    ssid1StaDevice = wifi.Install(phy, mac, sta);
-    
-    // 为sta添加ssid2 sta wifi device
-    // Perform the installation
-    ssid = Ssid("ssid_2");
-    mac.SetType("ns3::StaWifiMac",
-                "Ssid", SsidValue(ssid),
-                "ActiveProbing", BooleanValue(false));
-    ssid2StaDevice = wifi.Install(phy, mac, sta);
-    
-    // 为sta设置移动模型
-    Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator>();
-    positionAlloc->Add(Vector(60.0, 60.0, 0.0));
-    mobility.SetPositionAllocator(positionAlloc);
-    mobility.SetMobilityModel("ns3::RandomWalk2dMobilityModel");
-    mobility.Install(sta);
+    ssid1StaDevice = wifi1.Install(phy1, mac1, sta);
     ////////////////////////////////////////
     
     ////////////////////////////////////////
     // 为ssid1Aps添加ap wifi device，设置mobility model
-    ssid = Ssid("ssid_1");
-    mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-    mobility.SetPositionAllocator("ns3::GridPositionAllocator",
+    mobility1.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+    mobility1.SetPositionAllocator("ns3::GridPositionAllocator",
                                   "MinX", DoubleValue(30.0),
                                   "MinY", DoubleValue(30.0),
                                   "DeltaX", DoubleValue(30.0),
@@ -247,19 +227,61 @@ int main(int argc, char *argv[])
     for (uint32_t i = 0; i < ssid1ApNodes.GetN(); i++)
     {
         // Perform the installation
-        mac.SetType("ns3::ApWifiMac",
-                    "Ssid", SsidValue(ssid));
-        ssid1ApWifiDevices.Add(wifi.Install(phy, mac, ssid1ApNodes.Get(i)));
+        mac1.SetType("ns3::ApWifiMac",
+                    "Ssid", SsidValue(ssid1));
+        ssid1ApWifiDevices.Add(wifi1.Install(phy1, mac1, ssid1ApNodes.Get(i)));
         // Configure mobility
-        mobility.Install(ssid1ApNodes.Get(i));
+        mobility1.Install(ssid1ApNodes.Get(i));
     }
     // 为ssid1Aps添加ap wifi device，设置mobility model
+    ////////////////////////////////////////
+    // 初始化ssid1网络，为sta, ssid1Aps附加wifi接口
+    ////////////////////////////////////////////////////////////////////////////////
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // 初始化ssid2网络，为sta, ssid2Aps附加wifi接口
+    ////////////////////////////////////////
+    // 初始化wifi helper, mobility helper
+    NetDeviceContainer ssid2StaDevice;
+    NetDeviceContainer ssid2ApWifiDevices;
+    // TODO: sta在离开当前关联ap的范围才会断开连接
+    // Create a channel helper and phy helper, and then create the channel
+    YansWifiChannelHelper channel2 = YansWifiChannelHelper::Default();
+    channel2.AddPropagationLoss("ns3::RangePropagationLossModel");
+    YansWifiPhyHelper phy2 = YansWifiPhyHelper::Default();
+    phy2.SetPcapDataLinkType(YansWifiPhyHelper::DLT_IEEE802_11_RADIO);
+    phy2.SetChannel(channel2.Create());
+    // Create a WifiMacHelper, which is reused across STA and AP configurations
+    NqosWifiMacHelper mac2 = NqosWifiMacHelper::Default();
+    // Create a WifiHelper, which will use the above helpers to create
+    // and install Wifi devices.  Configure a Wifi standard to use, which
+    // will align various parameters in the Phy and Mac to standard defaults.
+    WifiHelper wifi2 = WifiHelper::Default();
+    // Configure mobility
+    MobilityHelper mobility2;
+    Ssid ssid2 = Ssid("ssid_2");
+    // 初始化wifi helper, mobility helper
+    ////////////////////////////////////////
+
+    ////////////////////////////////////////
+    // 为sta添加ssid2 sta wifi device
+    // Perform the installation
+    mac2.SetType("ns3::StaWifiMac",
+                "Ssid", SsidValue(ssid2),
+                "ActiveProbing", BooleanValue(false));
+    ssid2StaDevice = wifi2.Install(phy2, mac2, sta);
+    
+    // 为sta设置移动模型
+    Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator>();
+    positionAlloc->Add(Vector(60.0, 60.0, 0.0));
+    mobility2.SetPositionAllocator(positionAlloc);
+    mobility2.SetMobilityModel("ns3::RandomWalk2dMobilityModel");
+    mobility2.Install(sta);
     ////////////////////////////////////////
 
     ////////////////////////////////////////
     // 为ssid2Aps添加ap wifi device，设置mobility model
-    ssid = Ssid("ssid_2");
-    mobility.SetPositionAllocator("ns3::GridPositionAllocator",
+    mobility2.SetPositionAllocator("ns3::GridPositionAllocator",
                                   "MinX", DoubleValue(15.0),
                                   "MinY", DoubleValue(30.0),
                                   "DeltaX", DoubleValue(30.0),
@@ -269,17 +291,19 @@ int main(int argc, char *argv[])
     for (uint32_t i = 0; i < ssid2ApNodes.GetN(); i++)
     {
         // Perform the installation
-        mac.SetType("ns3::ApWifiMac",
-                    "Ssid", SsidValue(ssid));
-        ssid2ApWifiDevices.Add(wifi.Install(phy, mac, ssid2ApNodes.Get(i)));
+        mac2.SetType("ns3::ApWifiMac",
+                    "Ssid", SsidValue(ssid2));
+        ssid2ApWifiDevices.Add(wifi2.Install(phy2, mac2, ssid2ApNodes.Get(i)));
         // Configure mobility
-        mobility.Install(ssid2ApNodes.Get(i));
+        mobility2.Install(ssid2ApNodes.Get(i));
     }
     // 为ssid2Aps添加ap wifi device，设置mobility model
     ////////////////////////////////////////
+    // 初始化ssid2网络，为sta, ssid2Aps附加wifi接口
+    ////////////////////////////////////////////////////////////////////////////////
 
-    ////////////////////////////////////////
-    // 附加csma device
+    ////////////////////////////////////////////////////////////////////////////////
+    // 为节点附加csma接口
     // 方便同一局域网创建IP地址
     NetDeviceContainer lan1Devices;
     NetDeviceContainer lan2Devices;
@@ -326,9 +350,7 @@ int main(int argc, char *argv[])
 
     // 附加lan3 device (csma)
     lan3Devices.Add(csma.Install(NodeContainer(router, server)));
-    // 附加csma device
-    ////////////////////////////////////////
-    // 创建节点并附加wifi，csma接口
+    // 为节点附加csma接口
     ////////////////////////////////////////////////////////////////////////////////
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -497,8 +519,8 @@ int main(int argc, char *argv[])
 
     Config::Connect("/NodeList/0/DeviceList/[0-1]/$ns3::WifiNetDevice/RemoteStationManager/$ns3::ArfWifiManager/Rate", MakeCallback(&Rate));
 
-    phy.EnablePcap("MptcpDrqnSchedulerTopo", ssid1StaDevice);
-    phy.EnablePcap("MptcpDrqnSchedulerTopo", ssid2StaDevice);
+    phy1.EnablePcap("MptcpDrqnSchedulerTopo", ssid1StaDevice);
+    phy2.EnablePcap("MptcpDrqnSchedulerTopo", ssid2StaDevice);
     csma.EnablePcap("MptcpDrqnSchedulerTopo", lan3Devices.Get(1));
     // trace
     ////////////////////////////////////////////////////////////////////////////////
