@@ -25,6 +25,7 @@
 #include "ns3/wifi-net-device.h"
 #include "ns3/sta-wifi-mac.h"
 #include "ns3/v4ping-helper.h"
+#include "ns3/packet-sink.h"
 
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
@@ -140,6 +141,14 @@ int main(int argc, char *argv[])
     Config::SetDefault ("ns3::RandomWalk2dMobilityModel::Time", StringValue ("15s"));
     Config::SetDefault ("ns3::RandomWalk2dMobilityModel::Speed", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=2.0]"));
     Config::SetDefault ("ns3::RandomWalk2dMobilityModel::Bounds", StringValue ("0|120|0|120"));
+    
+    // 配置mptcp
+    Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1400));
+    Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(0));
+    Config::SetDefault("ns3::DropTailQueue::Mode", StringValue("QUEUE_MODE_PACKETS"));
+    Config::SetDefault("ns3::DropTailQueue::MaxPackets", UintegerValue(100));
+    Config::SetDefault("ns3::TcpL4Protocol::SocketType", TypeIdValue(MpTcpSocketBase::GetTypeId()));
+    Config::SetDefault("ns3::MpTcpSocketBase::MaxSubflows", UintegerValue(8)); // Sink
     // 命令行参数及全局配置
     ////////////////////////////////////////////////////////////////////////////////
 
@@ -452,14 +461,30 @@ int main(int argc, char *argv[])
 
     ////////////////////////////////////////////////////////////////////////////////
     // 设置应用层流量
-    V4PingHelper ping ("10.0.3.2");
-    ping.SetAttribute ("Interval", TimeValue (Seconds(1.0)));
-    ping.SetAttribute ("Size", UintegerValue (1024));
-    ping.SetAttribute ("Verbose", BooleanValue (true));
+    // sta ping server
+    // V4PingHelper ping ("10.0.3.2");
+    // ping.SetAttribute ("Interval", TimeValue (Seconds(1.0)));
+    // ping.SetAttribute ("Size", UintegerValue (1024));
+    // ping.SetAttribute ("Verbose", BooleanValue (true));
 
-    ApplicationContainer apps = ping.Install (sta);
-    apps.Start (Seconds (1.0));
-    apps.Stop (Seconds (100.0));
+    // ApplicationContainer apps = ping.Install (sta);
+    // apps.Start (Seconds (1.0));
+    // apps.Stop (Seconds (100.0));
+
+    // mptcp
+    uint16_t port = 9;
+    // 注意：BulkSendApplication默认置MaxBytes=0,即尽可能多，尽可能快的发包
+    MpTcpBulkSendHelper sendHelper("ns3::TcpSocketFactory", InetSocketAddress("10.0.3.2", port));
+    ApplicationContainer sendApp = sendHelper.Install(sta);
+
+    sendApp.Start(Seconds(1.0));
+    sendApp.Stop(Seconds(10.0));
+
+    MpTcpPacketSinkHelper rcvHelper("ns3::TcpSocketFactory", InetSocketAddress(Ipv4Address::GetAny(), port));
+    ApplicationContainer rcvApp = rcvHelper.Install(server);
+
+    rcvApp.Start(Seconds(0.0));
+    rcvApp.Stop(Seconds(11.0));
     // 设置应用层流量
     ////////////////////////////////////////////////////////////////////////////////
 
@@ -474,10 +499,11 @@ int main(int argc, char *argv[])
 
     phy.EnablePcap("MptcpDrqnSchedulerTopo", ssid1StaDevice);
     phy.EnablePcap("MptcpDrqnSchedulerTopo", ssid2StaDevice);
+    csma.EnablePcap("MptcpDrqnSchedulerTopo", lan3Devices.Get(1));
     // trace
     ////////////////////////////////////////////////////////////////////////////////
 
-    Simulator::Stop(Seconds(100.0));
+    Simulator::Stop(Seconds(15.0));
     Simulator::Run();
     Simulator::Destroy();
     return 0;
