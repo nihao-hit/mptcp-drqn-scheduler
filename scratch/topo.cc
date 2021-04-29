@@ -32,6 +32,7 @@
 #include "ns3/mobility-module.h"
 #include "ns3/csma-module.h"
 #include "ns3/internet-module.h"
+#include "ns3/wifi-module.h"
 #include "ns3/bridge-module.h"
 
 using namespace ns3;
@@ -123,7 +124,7 @@ int main(int argc, char *argv[])
     // LogComponentEnable("UdpEchoServerApplication", LOG_LEVEL_INFO);
     // LogComponentEnable("UdpEchoClientApplication", LOG_LEVEL_INFO);
     LogComponentEnable("MptcpDrqnSchedulerTopo", LOG_DEBUG);
-    // LogComponentEnable("V4Ping", LOG_LEVEL_INFO);
+    LogComponentEnable("V4Ping", LOG_LEVEL_INFO);
 
     // Set the maximum wireless range to 30 meters
     Config::SetDefault("ns3::RangePropagationLossModel::MaxRange", DoubleValue(30));
@@ -185,18 +186,18 @@ int main(int argc, char *argv[])
     // Create a channel helper and phy helper, and then create the channel
     YansWifiChannelHelper channel = YansWifiChannelHelper::Default();
     channel.AddPropagationLoss("ns3::RangePropagationLossModel");
-    YansWifiPhyHelper phy;
-    phy.SetPcapDataLinkType(WifiPhyHelper::DLT_IEEE802_11_RADIO);
+    YansWifiPhyHelper phy = YansWifiPhyHelper::Default();
+    phy.SetPcapDataLinkType(YansWifiPhyHelper::DLT_IEEE802_11_RADIO);
     phy.SetChannel(channel.Create());
     // Create a WifiMacHelper, which is reused across STA and AP configurations
-    WifiMacHelper mac;
+    HtWifiMacHelper mac = HtWifiMacHelper::Default();
     // Create a WifiHelper, which will use the above helpers to create
     // and install Wifi devices.  Configure a Wifi standard to use, which
     // will align various parameters in the Phy and Mac to standard defaults.
-    WifiHelper wifi;
+    WifiHelper wifi = WifiHelper::Default();
     // 默认的ArfWifiManager不支持802.11n
     // msg="WifiRemoteStationManager selected does not support HT rates", +0.000000000s 0 file=../src/wifi/model/arf-wifi-manager.cc, line=92
-    wifi.SetRemoteStationManager("ns3::MinstrelHtWifiManager");
+    // wifi.SetRemoteStationManager("ns3::MinstrelHtWifiManager");
     // Configure mobility
     MobilityHelper mobility;
     Ssid ssid;
@@ -205,7 +206,7 @@ int main(int argc, char *argv[])
 
     ////////////////////////////////////////
     // 为sta添加ssid1 sta wifi device
-    wifi.SetStandard(WIFI_STANDARD_80211n_2_4GHZ);
+    wifi.SetStandard(WIFI_PHY_STANDARD_80211n_2_4GHZ);
     // Perform the installation
     ssid = Ssid("ssid_1");
     mac.SetType("ns3::StaWifiMac",
@@ -214,7 +215,7 @@ int main(int argc, char *argv[])
     ssid1StaDevice = wifi.Install(phy, mac, sta);
     
     // 为sta添加ssid2 sta wifi device
-    wifi.SetStandard(WIFI_STANDARD_80211n_5GHZ);
+    wifi.SetStandard(WIFI_PHY_STANDARD_80211n_5GHZ);
     // Perform the installation
     ssid = Ssid("ssid_2");
     mac.SetType("ns3::StaWifiMac",
@@ -243,7 +244,7 @@ int main(int argc, char *argv[])
                                   "LayoutType", StringValue("RowFirst"));
     for (uint32_t i = 0; i < ssid1ApNodes.GetN(); i++)
     {
-        wifi.SetStandard(WIFI_STANDARD_80211n_2_4GHZ);
+        wifi.SetStandard(WIFI_PHY_STANDARD_80211n_2_4GHZ);
         // Perform the installation
         phy.Set("ChannelNumber", UintegerValue(ssid1ChannelList[i]));
         mac.SetType("ns3::ApWifiMac",
@@ -267,7 +268,7 @@ int main(int argc, char *argv[])
                                   "LayoutType", StringValue("RowFirst"));
     for (uint32_t i = 0; i < ssid2ApNodes.GetN(); i++)
     {
-        wifi.SetStandard(WIFI_STANDARD_80211n_5GHZ);
+        wifi.SetStandard(WIFI_PHY_STANDARD_80211n_5GHZ);
         // Perform the installation
         phy.Set("ChannelNumber", UintegerValue(ssid2ChannelList[i]));
         mac.SetType("ns3::ApWifiMac",
