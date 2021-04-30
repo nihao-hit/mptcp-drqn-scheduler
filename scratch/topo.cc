@@ -519,6 +519,7 @@ int main(int argc, char *argv[])
     Config::Connect("/NodeList/0/DeviceList/[0-1]/$ns3::WifiNetDevice/Mac/$ns3::StaWifiMac/Assoc", MakeCallback(&Assoc));
     Config::Connect("/NodeList/0/DeviceList/[0-1]/$ns3::WifiNetDevice/Mac/$ns3::StaWifiMac/DeAssoc", MakeCallback(&DeAssoc));
 
+    // TODO: 为ArfWifiManager添加Rate trace
     Config::Connect("/NodeList/0/DeviceList/[0-1]/$ns3::WifiNetDevice/RemoteStationManager/$ns3::ArfWifiManager/Rate", MakeCallback(&Rate));
 
     phy1.EnablePcap("MptcpDrqnSchedulerTopo", ssid1StaDevice);
