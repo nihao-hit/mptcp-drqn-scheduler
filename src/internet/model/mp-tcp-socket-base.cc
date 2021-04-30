@@ -2374,7 +2374,7 @@ MpTcpSocketBase::InitiateSubflows()
         Ipv4Address remote = remoteAddrs[j]->ipv4Addr;
 
         // skip already established flows and if there is no route between a pair
-        if (((local == m_localAddress) || (remote == m_remoteAddress)) || (!IsThereRoute(local, remote)))
+        if (((local == m_localAddress) && (remote == m_remoteAddress)) || (!IsThereRoute(local, remote)))
           {
             NS_LOG_INFO("InitiateSubflows -> Skip subflow which is already established or has not a route (" << local << " -> " << remote<<")");
             continue;
