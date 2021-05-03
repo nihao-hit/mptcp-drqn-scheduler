@@ -47,7 +47,8 @@ typedef enum
 
 typedef enum
 {
-  Round_Robin
+  Round_Robin,
+  DRQN
 } DataDistribAlgo_t;
 
 typedef enum

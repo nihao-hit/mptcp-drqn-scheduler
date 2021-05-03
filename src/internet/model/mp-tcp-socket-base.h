@@ -300,6 +300,8 @@ protected: // protected variables
   bool client;
   bool server;
 
+private:
+  uint8_t drqnScheduler();
 };
 
 }   //namespace ns3

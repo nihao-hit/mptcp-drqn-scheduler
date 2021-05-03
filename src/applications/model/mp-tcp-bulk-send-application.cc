@@ -190,6 +190,11 @@ void MpTcpBulkSendApplication::StartApplication (void) // Called at time specifi
           NS_LOG_UNCOND("Connection is failed");
         }
     }
+  // TODO: 这里调用的SendData()与ConnectionSucceeded()回调，DataSend()回调中调用是不是重复了，
+  // 这里与ConnectionSucceeded()回调都只调用一次，
+  // SendPendingData()->NotifyDataSent()->DataSend()
+  // SendPendingData()被以下函数调用：SendBufferedData(), ReceveidAck(routeId), NewAck(routeID) & DupAck(routeID), ProcessSynSent(routeId)
+  // 因此一次SendData()可能触发多次SendData()
   if (m_connected)
     {
       SendData ();
@@ -280,7 +285,7 @@ void MpTcpBulkSendApplication::ConnectionFailed (Ptr<Socket> socket)
 void MpTcpBulkSendApplication::DataSend (Ptr<Socket>, uint32_t)
 {
   NS_LOG_FUNCTION (this);
-
+  // TODO: 添加延时函数，模拟突发流量
   if (m_connected)
     { // Only send new data if the connection has completed
       Simulator::ScheduleNow(&MpTcpBulkSendApplication::SendData, this);

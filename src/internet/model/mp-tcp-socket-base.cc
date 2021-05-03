@@ -56,9 +56,10 @@ MpTcpSocketBase::GetTypeId(void)
 
       .AddAttribute("SchedulingAlgorithm",
                     "Algorithm for data distribution between sub-flows",
-          EnumValue(Round_Robin),
+          EnumValue(DRQN),
           MakeEnumAccessor(&MpTcpSocketBase::SetDataDistribAlgo),
-          MakeEnumChecker(Round_Robin, "Round_Robin"))
+          MakeEnumChecker(Round_Robin, "Round_Robin",
+                          DRQN, "DRQN"))
 
       .AddAttribute("PathManagement",
                      "Mechanism for establishing new sub-flows",
@@ -1779,6 +1780,22 @@ MpTcpSocketBase::SendPendingData(uint8_t sFlowIdx)
   return (nOctetsSent > 0);
 }
 
+// TODO: 暂时使用minRtt调度算法
+uint8_t 
+MpTcpSocketBase::drqnScheduler() {
+  NS_LOG_FUNCTION(this);
+  uint32_t idx = 0;
+  Time srtt = subflows[idx]->rtt->GetCurrentEstimate();
+  NS_LOG_DEBUG(Simulator::Now()<<" Subflow "<<0<<" srtt "<<srtt);
+  for(uint32_t i = 1; i < subflows.size(); i++) {
+    Time tmp = subflows[i]->rtt->GetCurrentEstimate();
+    if(tmp < srtt) idx = i;
+    NS_LOG_DEBUG(Simulator::Now()<<" Subflow "<<i<<" srtt "<<tmp);
+  }
+  NS_LOG_DEBUG(Simulator::Now()<<" DRQN scheduler selected subflow "<<idx);
+  return idx;
+}
+
 uint8_t
 MpTcpSocketBase::getSubflowToUse()
 {
@@ -1789,6 +1806,8 @@ MpTcpSocketBase::getSubflowToUse()
   case Round_Robin:
     nextSubFlow = (lastUsedsFlowIdx + 1) % subflows.size();
     break;
+  case DRQN:
+    nextSubFlow = drqnScheduler();
   default:
     break;
     }
