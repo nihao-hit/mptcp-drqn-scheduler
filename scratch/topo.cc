@@ -245,7 +245,7 @@ int main(int argc, char *argv[])
     // 初始化wifi helper, mobility helper
     NetDeviceContainer ssid2StaDevice;
     NetDeviceContainer ssid2ApWifiDevices;
-    // TODO: sta在离开当前关联ap的范围才会断开连接
+    // TODO: 现在两个ssid都使用的默认802.11a，是否需要配置mac协议异构性
     // Create a channel helper and phy helper, and then create the channel
     YansWifiChannelHelper channel2 = YansWifiChannelHelper::Default();
     channel2.AddPropagationLoss("ns3::RangePropagationLossModel");
