@@ -10,8 +10,12 @@
 #include <algorithm>
 #include <stdlib.h>
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <cassert>
+
+#include "json.hpp"
+
 #include "ns3/abort.h"
 #include "ns3/log.h"
 #include "ns3/string.h"
@@ -26,10 +30,17 @@
 #include "ns3/object-vector.h"
 
 //#define PLOT
+#define CXXX_TRACE
 #define RAND_GAP
 
 NS_LOG_COMPONENT_DEFINE("MpTcpSocketBase");
+using json = nlohmann::json;
 using namespace std;
+
+inline void calcCwndTrace(pair<uint32_t, uint32_t>& cwndTrace, uint32_t cwndMsr) {
+  cwndTrace.first = (cwndTrace.first * cwndTrace.second + cwndMsr) / ++cwndTrace.second;
+}
+
 namespace ns3
 {
 NS_OBJECT_ENSURE_REGISTERED(MpTcpSocketBase);
@@ -105,7 +116,22 @@ MpTcpSocketBase::GetTypeId(void)
       .AddAttribute ("LargePlotting", " Activate short flow plotting ",
           BooleanValue (false),
           MakeBooleanAccessor (&MpTcpSocketBase::m_largePlotting),
-          MakeBooleanChecker());
+          MakeBooleanChecker())
+
+      .AddAttribute ("Epoch", "",
+          TimeValue (MilliSeconds(200)),
+          MakeTimeAccessor (&MpTcpSocketBase::epoch),
+          MakeTimeChecker())
+      
+      .AddAttribute ("RewardAlpha", "",
+          DoubleValue (0.3),
+          MakeDoubleAccessor (&MpTcpSocketBase::rewardAlpha),
+          MakeDoubleChecker<double>())
+      
+      .AddAttribute ("RewardBeta", "",
+          DoubleValue (0.5),
+          MakeDoubleAccessor (&MpTcpSocketBase::rewardBeta),
+          MakeDoubleChecker<double>());
 
   return tid;
 }
@@ -153,6 +179,7 @@ MpTcpSocketBase::MpTcpSocketBase():
   _e = 1;    // epsilon 1 by default
   a = A_SCALE;
 
+  selectedSubflow = 0;
 
   Callback<void, Ptr<Socket> > vPS = MakeNullCallback<void, Ptr<Socket> >();
   Callback<void, Ptr<Socket>, const Address &> vPSA = MakeNullCallback<void, Ptr<Socket>, const Address &>();
@@ -243,6 +270,13 @@ MpTcpSocketBase::EstimateRtt(uint8_t sFlowIdx, const TcpHeader& mptcpHeader)
   sFlow->_RTT.push_back(make_pair(Simulator::Now().GetSeconds(), sFlow->lastMeasuredRtt.GetMilliSeconds()));
   sFlow->_AvgRTT.push_back(make_pair(Simulator::Now().GetSeconds(), sFlow->rtt->GetCurrentEstimate().GetMilliSeconds()));
   sFlow->_RTO.push_back(make_pair(Simulator::Now().GetSeconds(), sFlow->rtt->RetransmitTimeout().GetMilliSeconds()));
+#endif
+
+#ifdef CXXX_TRACE
+  double meanRtt = sFlow->rttTrace.first;
+  uint32_t count = sFlow->rttTrace.second;
+  meanRtt = (meanRtt * count + sFlow->lastMeasuredRtt.GetDouble()) / ++count;
+  sFlow->rttTrace = make_pair(meanRtt, count);
 #endif
 }
 
@@ -956,8 +990,8 @@ MpTcpSocketBase::ReceivedAck(uint8_t sFlowIdx, Ptr<Packet> packet, const TcpHead
           // All segments before ackSeqNum should be removed from the mapDSN list.
           if (ptrDSN->subflowSeqNumber + ptrDSN->dataLevelLength <= ack)
             { // Optional task ...
-              //next = sFlow->mapDSN.erase(current);
-              //delete ptrDSN;
+              next = sFlow->mapDSN.erase(current);
+              delete ptrDSN;
             }
           // There is a sent segment with subflowSN equal to ack but the ack is smaller than already receveid acked!
           else if ((ptrDSN->subflowSeqNumber == ack) && (ack < sFlow->highestAck + 1))
@@ -1319,6 +1353,10 @@ MpTcpSocketBase::DoRetransmit(uint8_t sFlowIdx)
     }
 #endif
 
+#ifdef CXXX_TRACE
+  sFlow->retxTrace++;
+#endif
+
   //TxBytes += ptrDSN->dataLevelLength + 62;
 
   // Update Rtt
@@ -1372,6 +1410,10 @@ MpTcpSocketBase::DoRetransmit(uint8_t sFlowIdx, DSNMapping* ptrDSN)
 #ifdef PLOT
   uint32_t tmp = (((ptrDSN->subflowSeqNumber + ptrDSN->dataLevelLength) - sFlow->initialSequnceNumber) / sFlow->MSS) % mod;
   sFlow->RETRANSMIT.push_back(make_pair(Simulator::Now().GetSeconds(), tmp));
+#endif
+
+#ifdef CXXX_TRACE
+  sFlow->retxTrace++;
 #endif
 
   //TxBytes += ptrDSN->dataLevelLength + 62;
@@ -1781,7 +1823,7 @@ MpTcpSocketBase::SendPendingData(uint8_t sFlowIdx)
 }
 
 // TODO: 暂时使用minRtt调度算法
-uint8_t 
+void 
 MpTcpSocketBase::drqnScheduler() {
   NS_LOG_FUNCTION(this);
   uint32_t idx = 0;
@@ -1793,7 +1835,7 @@ MpTcpSocketBase::drqnScheduler() {
     NS_LOG_DEBUG(Simulator::Now()<<" Subflow "<<i<<" srtt "<<tmp);
   }
   NS_LOG_DEBUG(Simulator::Now()<<" DRQN scheduler selected subflow "<<idx);
-  return idx;
+  selectedSubflow = idx;
 }
 
 uint8_t
@@ -1807,7 +1849,7 @@ MpTcpSocketBase::getSubflowToUse()
     nextSubFlow = (lastUsedsFlowIdx + 1) % subflows.size();
     break;
   case DRQN:
-    nextSubFlow = drqnScheduler();
+    nextSubFlow = selectedSubflow;
   default:
     break;
     }
@@ -1905,6 +1947,11 @@ MpTcpSocketBase::ReduceCWND(uint8_t sFlowIdx, DSNMapping* ptrDSN)
 #ifdef PLOT
   reTxTrack.push_back(make_pair(Simulator::Now().GetSeconds(), sFlow->cwnd));
   sFlow->ssthreshtrack.push_back(make_pair(Simulator::Now().GetSeconds(), sFlow->ssthresh));
+#endif
+
+#ifdef CXXX_TRACE
+  // cxxx: 拥塞控制算法的快速重传阶段
+  calcCwndTrace(sFlow->cwndTrace, sFlow->cwnd.Get());
 #endif
 }
 
@@ -2703,6 +2750,11 @@ MpTcpSocketBase::DupAck(uint8_t sFlowIdx, DSNMapping* ptrDSN)
 #ifdef PLOT
       DupAcks.push_back(make_pair(Simulator::Now().GetSeconds(), sFlow->cwnd));
       sFlow->ssthreshtrack.push_back(make_pair(Simulator::Now().GetSeconds(), sFlow->ssthresh));
+#endif
+
+#ifdef CXXX_TRACE
+      // cxxx: 拥塞控制算法的快速恢复阶段，且继续收到重复ack
+      calcCwndTrace(sFlow->cwndTrace, sFlow->cwnd.Get());
 #endif
       NS_LOG_WARN ("DupAck-> FastRecovery. Increase cwnd by one MSS, from " << sFlow->cwnd.Get() <<" -> " << sFlow->cwnd << " AvailableWindow: " << AvailableWindow(sFlowIdx));
       FastRecoveries++;
@@ -3774,7 +3826,7 @@ MpTcpSocketBase::OpenCWND(uint8_t sFlowIdx, uint32_t ackedBytes)
     }
 
   calculateTotalCWND();
-  if (cwnd < ssthresh)
+  if (cwnd < ssthresh) // cxxx: 拥塞控制算法的慢启动阶段
     {
       sFlow->cwnd += sFlow->MSS;
 #ifdef PLOT
@@ -3783,9 +3835,14 @@ MpTcpSocketBase::OpenCWND(uint8_t sFlowIdx, uint32_t ackedBytes)
       totalCWNDtrack.push_back(make_pair(Simulator::Now().GetSeconds(), totalCwnd));
       sFlow->_ss.push_back(make_pair(Simulator::Now().GetSeconds(), TimeScale));
 #endif
+
+#ifdef CXXX_TRACE
+      calcCwndTrace(sFlow->cwndTrace, sFlow->cwnd.Get());
+#endif
+
       NS_LOG_WARN ("Congestion Control (Slow Start) increment by one segmentSize");
     }
-  else
+  else // cxxx: 拥塞控制算法的拥塞避免阶段
     {
       switch (AlgoCC)
         {
@@ -3900,6 +3957,10 @@ MpTcpSocketBase::OpenCWND(uint8_t sFlowIdx, uint32_t ackedBytes)
         }
 #ifdef PLOT
       sFlow->_ca.push_back(make_pair(Simulator::Now().GetSeconds(), TimeScale));
+#endif
+
+#ifdef CXXX_TRACE
+      calcCwndTrace(sFlow->cwndTrace, sFlow->cwnd.Get());
 #endif
     }
 }
@@ -4211,6 +4272,82 @@ MpTcpSocketBase::GetEstSubflows()
         c++;
     }
   return c;
+}
+
+// void MpTcpSocketBase::PrintMptcpTrace(double interval) {
+//     for(uint32_t i = 0; i < subflows.size(); i++) {
+//         Ptr<MpTcpSubFlow> subflow = subflows[i];
+//         std::cout<<Simulator::Now()<<"subflow="<<subflow->sAddr
+//                                      <<"bytesTrace="<<subflow->bytesTrace
+//                                      <<"cwndTrace="<<subflow->cwndTrace.first
+//                                      <<"rttTrace="<<subflow->rttTrace.first
+//                                      <<"unAckPktsTrace="<<subflow->unAckPktsTrace
+//                                      <<"retxTrace="<<subflow->retxTrace<<std::endl;
+//         subflow->bytesTrace = 0;
+//         subflow->cwndTrace = make_pair(0, 0);
+//         subflow->rttTrace = make_pair(0, 0);
+//         subflow->unAckPktsTrace = 0;
+//         subflow->retxTrace = 0;
+//     }
+//     Simulator::Schedule(Seconds(interval), &MpTcpSocketBase::PrintMptcpTrace, this, interval);
+// }
+
+void MpTcpSocketBase::scheduleEpoch() {
+  NS_LOG_FUNCTION(this);
+  if(subflows.size() == 2) {
+    Ptr<MpTcpSubFlow> s1 = subflows[0];
+    Ptr<MpTcpSubFlow> s2 = subflows[1];
+    double s1Goodput = s1->bytesAckedTrace()/epoch.GetDouble();
+    double s2Goodput = s2->bytesAckedTrace()/epoch.GetDouble();
+    json nextState = {
+      {
+        {"s1State", {
+          {"goodput", s1Goodput},
+          {"cwnd", s1->cwndTrace.first},
+          {"rtt", s1->rttTrace.first},
+          {"unAckPkts", s1->unAckPktsTrace()},
+          {"retx", s1->retxTrace}
+        }},
+        {"s2State", {
+          {"goodput", s2Goodput},
+          {"cwnd", s2->cwndTrace.first},
+          {"rtt", s2->rttTrace.first},
+          {"unAckPkts", s2->unAckPktsTrace()},
+          {"retx", s2->retxTrace}
+        }}
+      }
+    };
+
+    double reward = (s1Goodput + s2Goodput) 
+      - rewardAlpha*(s1Goodput*s1->rttTrace.first + s2Goodput*s2->rttTrace.first)/(s1Goodput + s2Goodput)
+      - rewardBeta*(s1->retxTrace + s2->retxTrace);
+    //   |________|________|
+    //   t1       t2       t3
+    //   a1
+    //         s2,a2,r1
+    //                  s3,a3,r2
+    // 从t3开始收集经验元组(s2,a2,r2,s3,t3)
+    if(!state.empty()) {
+      // 将经验元组('state', 'action', 'reward', 'next_state', 'timestamp')写入文件
+      json stateJson = json::parse(state);
+      json transation = {
+        {"state", stateJson},
+        {"action", selectedSubflow},
+        {"reward", reward},
+        {"nextState", nextState},
+        {"timestamp", Simulator::Now().GetDouble()}
+      };
+      std::string transationStr = transation.dump();
+      ofstream of("/home/cx/Desktop/transation.json", std::ios_base::app);
+      of<<transationStr<<endl;
+      NS_LOG_DEBUG(Simulator::Now()<<" Transation: "<<transationStr);
+    }
+    // 更新state
+    state = nextState.dump();
+    // 更新action
+    drqnScheduler();
+  }
+  Simulator::Schedule(epoch, &MpTcpSocketBase::scheduleEpoch, this);
 }
 
 }//namespace ns3

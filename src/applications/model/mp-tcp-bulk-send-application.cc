@@ -273,6 +273,10 @@ void MpTcpBulkSendApplication::ConnectionSucceeded (Ptr<Socket> socket)
   NS_LOG_FUNCTION (this << socket);
   NS_LOG_LOGIC ("MpTcpBulkSendApplication Connection succeeded");
   m_connected = true;
+
+  // cxxx: 在应用启动连接建立后调度经验元组采集函数
+  Simulator::ScheduleNow(&MpTcpSocketBase::scheduleEpoch, m_socket);
+
   SendData ();
 }
 

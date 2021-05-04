@@ -144,6 +144,10 @@ int main(int argc, char *argv[])
     Config::SetDefault ("ns3::RandomWalk2dMobilityModel::Bounds", StringValue ("0|120|0|120"));
     
     // 配置mptcp
+    Config::SetDefault("ns3::MpTcpSocketBase::Epoch", TimeValue(MilliSeconds(200)));
+    Config::SetDefault("ns3::MpTcpSocketBase::RewardAlpha", DoubleValue(0.3));
+    Config::SetDefault("ns3::MpTcpSocketBase::RewardBeta", DoubleValue(0.5));
+
     Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1400));
     Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(0));
     Config::SetDefault("ns3::DropTailQueue::Mode", StringValue("QUEUE_MODE_PACKETS"));

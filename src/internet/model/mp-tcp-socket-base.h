@@ -300,8 +300,16 @@ protected: // protected variables
   bool client;
   bool server;
 
-private:
-  uint8_t drqnScheduler();
+public:
+  Time epoch;
+  double rewardAlpha;
+  double rewardBeta;
+
+  std::string state; // deserialization后的状态
+  uint8_t selectedSubflow; // index of array subflows
+
+  void drqnScheduler();
+  void scheduleEpoch();
 };
 
 }   //namespace ns3

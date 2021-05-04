@@ -107,6 +107,22 @@ public:
   vector<pair<double, double> > _RTT;
   vector<pair<double, double> > _AvgRTT;
   vector<pair<double, double> > _RTO;
+
+public:
+  // cxxx: drqn需要trace的周期性状态
+  uint32_t bytesAckedTrace(){
+    // 假设初始序列号为0
+    static uint32_t oldValue = 0;
+    int rst = highestAck - oldValue;
+    oldValue = highestAck;
+    return rst;
+  } // trace传输成功字节数, goodput
+  pair<uint32_t, uint32_t> cwndTrace; // trace cwnd在拥塞控制算法各阶段更新后的均值与采样个数
+  pair<double, uint32_t> rttTrace; // trace当前平均RTT与RTT采样个数
+  uint32_t unAckPktsTrace(){
+    return mapDSN.size();
+  } // trace累计未确认包数量
+  uint32_t retxTrace; // trace累计重传次数
 };
 
 }
