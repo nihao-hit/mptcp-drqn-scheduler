@@ -138,7 +138,7 @@ protected: // protected methods
   virtual bool SendPendingData(uint8_t sFlowId = -1);
   void SendEmptyPacket(uint8_t sFlowId, uint8_t flags);
   void SendRST(uint8_t sFlowIdx);
-  virtual int SendDataPacket (uint8_t sFlowIdx, uint32_t pktSize, bool withAck);
+  virtual int SendDataPacket (uint8_t sFlowIdx, uint32_t pktSize, bool withAck, uint32_t dataSeq);
   // Connection closing operations
   virtual int DoClose(uint8_t sFlowIdx);
   bool CloseMultipathConnection();      // Close MPTCP connection is possible

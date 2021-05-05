@@ -66,6 +66,8 @@ MpTcpSubFlow::MpTcpSubFlow() :
   AccumulativeAck = false;
   m_limitedTxCount = 0;
 
+  srttExpired = Simulator::Now() + estimate;
+  rdnCnt = 0;
   // cxxx: drqn需要trace的状态
   cwndTrace = make_pair(0, 0); // trace cwnd在拥塞控制算法各阶段更新后的均值与采样个数
   rttTrace = make_pair(0, 0); // trace当前平均RTT与RTT采样个数

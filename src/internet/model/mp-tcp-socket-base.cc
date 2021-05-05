@@ -915,7 +915,12 @@ MpTcpSocketBase::ReceivedData(uint8_t sFlowIdx, Ptr<Packet> p, const TcpHeader& 
               else
                 { /** Received packet is duplicated in connection level! */
                   NS_ASSERT(optDSN->dataSeqNumber < nextRxSequence);
-                  NS_FATAL_ERROR("This functionality is not yet implemented!");
+                  
+                  // cxxx: 冗余调度情况1：冗余包携带重复的数据，递增子流序列号，返回ACK
+                  // NS_FATAL_ERROR("This functionality is not yet implemented!");
+                  sFlow->RxSeqNumber += optDSN->dataLevelLength;
+                  sFlow->highestAck = std::max(sFlow->highestAck, (mptcpHeader.GetAckNumber()).GetValue() - 1);
+                  
                   NS_LOG_WARN(this << "Duplicated segment received at connection level so it should be rejected!");
                   SendEmptyPacket(sFlowIdx, TcpHeader::ACK);
                 }
@@ -923,10 +928,14 @@ MpTcpSocketBase::ReceivedData(uint8_t sFlowIdx, Ptr<Packet> p, const TcpHeader& 
           else if (optDSN->subflowSeqNumber > sFlow->RxSeqNumber)
             { /* Received packet is out of order at sub-flow level */
               // This condition might occurs when a packet get drop...Does this condition mean that packet should be out of order at connection level? YES
-              NS_ASSERT(optDSN->dataSeqNumber > nextRxSequence);
-              StoreUnOrderedData(
+              // cxxx: 冗余调度情况2：连续冗余包中间出现丢包，后到达的冗余包携带重复数据，返回重复ACK
+              // NS_ASSERT(optDSN->dataSeqNumber > nextRxSequence);
+              if(optDSN->dataSeqNumber > nextRxSequence) {
+                StoreUnOrderedData(
                   new DSNMapping(sFlowIdx, optDSN->dataSeqNumber, optDSN->dataLevelLength, optDSN->subflowSeqNumber,
                       mptcpHeader.GetAckNumber().GetValue()/*, p*/));
+              }
+              
               SendEmptyPacket(sFlowIdx, TcpHeader::ACK); // We need to send ACK regardless of whether segment has already stored in unOrdered or not!
             }
           else if (optDSN->subflowSeqNumber < sFlow->RxSeqNumber)
@@ -1049,7 +1058,7 @@ MpTcpSocketBase::GetSegSize(void) const
 
 // This function only called by SendPendingData() in our implementation!
 int
-MpTcpSocketBase::SendDataPacket(uint8_t sFlowIdx, uint32_t size, bool withAck)
+MpTcpSocketBase::SendDataPacket(uint8_t sFlowIdx, uint32_t size, bool withAck, uint32_t dataSeq)
 {
   NS_LOG_FUNCTION (this << (uint32_t)sFlowIdx << size << withAck);
   Ptr<MpTcpSubFlow> sFlow = subflows[sFlowIdx];
@@ -1101,7 +1110,13 @@ MpTcpSocketBase::SendDataPacket(uint8_t sFlowIdx, uint32_t size, bool withAck)
     {
       NS_ASSERT(!guard);
       NS_ASSERT(sFlow->maxSeqNb == sFlow->TxSeqNumber -1);
-      p = sendingBuffer.CreatePacket(size);
+
+      if(dataSeq == -1) { // cxxx: 非冗余包，从connection level sendingBuffer构造
+        p = sendingBuffer.CreatePacket(size);
+      }else{ // cxxx: 冗余包，直接复制先前选择最优子流发送的包信息
+        p = Create<Packet>(packetSize);
+      }
+      
       if (p == 0)
         { // TODO I guess we should not return from here - What do we do then kill ourself?
           NS_LOG_WARN("["<< m_node->GetId() << "] ("<< sFlow->routeId << ") No data is available in SendingBuffer to create a pkt from it! SendingBufferSize: " << sendingBuffer.PendingData());
@@ -1151,13 +1166,16 @@ MpTcpSocketBase::SendDataPacket(uint8_t sFlowIdx, uint32_t size, bool withAck)
   header.SetSourcePort(sFlow->sPort);
   header.SetDestinationPort(sFlow->dPort);
   header.SetWindowSize(AdvertisedWindowSize());
-  if (!guard)
+  if (!guard && dataSeq == -1)
     { // If packet is made from sendingBuffer, then we got to add the packet and its info to subflow's mapDSN.
       sFlow->AddDSNMapping(sFlowIdx, nextTxSequence, packetSize, sFlow->TxSeqNumber, sFlow->RxSeqNumber/*, p->Copy()*/);
-    }
-  if (!guard)
-    { // if packet is made from sendingBuffer, then we use nextTxSequence to OptDSN
+      // if packet is made from sendingBuffer, then we use nextTxSequence to OptDSN
       header.AddOptDSN(OPT_DSN, nextTxSequence, packetSize, sFlow->TxSeqNumber);
+    }
+  else if(!guard)
+    { // cxxx: 冗余包，dataSeq需要使用先前选择最优子流发送的包信息
+      sFlow->AddDSNMapping(sFlowIdx, dataSeq, packetSize, sFlow->TxSeqNumber, sFlow->RxSeqNumber/*, p->Copy()*/);
+      header.AddOptDSN(OPT_DSN, dataSeq, packetSize, sFlow->TxSeqNumber);
     }
   else
     { // if packet is made from subflow's Buffer (already sent packets), that packet's dataSeqNumber should be added here!
@@ -1201,8 +1219,8 @@ MpTcpSocketBase::SendDataPacket(uint8_t sFlowIdx, uint32_t size, bool withAck)
   sFlow->rtt->SentSeq(SequenceNumber32(sFlow->TxSeqNumber), packetSize); // Notify the RTT of a data packet sent
   sFlow->TxSeqNumber += packetSize; // Update subflow's nextSeqNum to send.
   sFlow->maxSeqNb = std::max(sFlow->maxSeqNb, sFlow->TxSeqNumber - 1);
-  if (!guard)
-    {
+  if (!guard && dataSeq == -1)
+    { // cxxx: 非冗余包才递增dataSeq
       nextTxSequence += packetSize;  // Update connection sequence number
       //TxBytes += packetSize + 20 + 20 + 20 + 2;
     }
@@ -1739,7 +1757,7 @@ MpTcpSocketBase::SendPendingData(uint8_t sFlowIdx)
             { // In case case more than one packet can be sent, if subflow's window allow
               whileCounter++;
               NS_LOG_UNCOND("["<< m_node->GetId() <<"] MainBuffer is empty - subflowBuffer(" << sF->mapDSN.size()<< ") sFlow("<< (int)sFlowIdx << ") AvailableWindow: " << window << " CWND: " << sF->cwnd << " subflow is in timoutRecovery{" << (sF->mapDSN.size() > 0) << "} LoopIter: " << whileCounter);
-              int ret = SendDataPacket(sF->routeId, window, false);
+              int ret = SendDataPacket(sF->routeId, window, false, -1);
               if (ret < 0)
                 {
                   NS_LOG_UNCOND(this <<" [" << m_node->GetId() << "]("<< sF->routeId << ")" << " SendDataPacket return -1 -> Return false from SendPendingData()!?");
@@ -1771,32 +1789,37 @@ MpTcpSocketBase::SendPendingData(uint8_t sFlowIdx)
   // Send data as much as possible (it depends on subflows AvailableWindow and data in sending buffer)
   while (!sendingBuffer.Empty())
     {
-      uint32_t window = 0;
-      // Search for a subflow with available windows
-      for (uint32_t i = 0; i < subflows.size(); i++)
-        {
-          if (subflows[lastUsedsFlowIdx]->state != ESTABLISHED)
-            continue;
-          window = std::min(AvailableWindow(lastUsedsFlowIdx), sendingBuffer.PendingData()); // Get available window size
-          if (window == 0)
-            {  // No more available window in the current subflow, try with another one
-              NS_LOG_LOGIC("SendPendingData -> No window available on (" << (int)lastUsedsFlowIdx << ") Try next one!");
-              lastUsedsFlowIdx = getSubflowToUse();
-            }
-          else
-            {
-              NS_LOG_LOGIC ("SendPendingData -> Find subflow with spare window PendingData (" << sendingBuffer.PendingData() << ") Available window ("<<AvailableWindow (lastUsedsFlowIdx)<<")");
-              break;
-            }
-        }
+      // uint32_t window = 0;
+      // // Search for a subflow with available windows
+      // for (uint32_t i = 0; i < subflows.size(); i++)
+      //   {
+      //     if (subflows[lastUsedsFlowIdx]->state != ESTABLISHED)
+      //       continue;
+      //     window = std::min(AvailableWindow(lastUsedsFlowIdx), sendingBuffer.PendingData()); // Get available window size
+      //     if (window == 0)
+      //       {  // No more available window in the current subflow, try with another one
+      //         NS_LOG_LOGIC("SendPendingData -> No window available on (" << (int)lastUsedsFlowIdx << ") Try next one!");
+      //         lastUsedsFlowIdx = getSubflowToUse();
+      //       }
+      //     else
+      //       {
+      //         NS_LOG_LOGIC ("SendPendingData -> Find subflow with spare window PendingData (" << sendingBuffer.PendingData() << ") Available window ("<<AvailableWindow (lastUsedsFlowIdx)<<")");
+      //         break;
+      //       }
+      //   }
 
-      if (window == 0)
-        break;
+      // if (window == 0)
+      //   break;
 
       // Take a pointer to the subflow with available window.
+      lastUsedsFlowIdx = getSubflowToUse();
+      uint32_t window = std::min(AvailableWindow(lastUsedsFlowIdx), sendingBuffer.PendingData()); // Get available window size
+      if(window == 0)
+        break;
       sFlow = subflows[lastUsedsFlowIdx];
 
       // By this condition only connection initiator can send data need to be change though!
+      int amountSent;
       if (sFlow->state == ESTABLISHED)
         {
           currentSublow = sFlow->routeId;
@@ -1805,7 +1828,11 @@ MpTcpSocketBase::SendPendingData(uint8_t sFlowIdx)
             { // When subflow is in timeout recovery and the last segment is not reached yet then segment size should be equal to MSS
               s = sFlow->MSS;
             }
-          int amountSent = SendDataPacket(sFlow->routeId, s, false);
+          amountSent = SendDataPacket(sFlow->routeId, s, false, -1);
+
+          // cxxx: 重置SRTT过期时间
+          sFlow->srttExpired = Simulator::Now() + sFlow->rtt->GetCurrentEstimate();
+
           if (amountSent < 0)
             {
               NS_LOG_UNCOND(this <<" [" << m_node->GetId() << "]("<< sFlow->routeId << ")" << " SendDataPacket return -1 -> Return false from SendPendingData()!?");
@@ -1814,7 +1841,22 @@ MpTcpSocketBase::SendPendingData(uint8_t sFlowIdx)
           else
             nOctetsSent += amountSent;  // Count total bytes sent in this loop
         } // end of if statement
-      lastUsedsFlowIdx = getSubflowToUse();
+
+        // cxxx: 如果amountSent==0，证明最优子流此时正在重传包，此时不进行冗余调度
+        if(amountSent != 0) {
+          for(uint32_t i = 0; i < subflows.size(); i++) {
+            Ptr<MpTcpSubFlow> other = subflows[i];
+            if(i != lastUsedsFlowIdx && other->srttExpired < Simulator::Now() && other->state == ESTABLISHED) {
+              NS_LOG_DEBUG(Simulator::Now()<<" DRQN schedule redundant packet on subflowIdx="<<i
+                                          <<", rdnId="<<other->rdnCnt);
+              other->rdnCnt++;
+              SendDataPacket(i, amountSent, false, nextTxSequence - amountSent);
+              // cxxx: 重置SRTT过期时间
+              sFlow->srttExpired = Simulator::Now() + sFlow->rtt->GetCurrentEstimate();
+            }
+          }
+        }
+      // lastUsedsFlowIdx = getSubflowToUse();
     } // end of main while loop
   //NS_LOG_UNCOND ("["<< m_node->GetId() << "] SendPendingData -> amount data sent = " << nOctetsSent << "... Notify application.");
   if (nOctetsSent > 0)

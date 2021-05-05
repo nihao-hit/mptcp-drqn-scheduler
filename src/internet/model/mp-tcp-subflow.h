@@ -109,6 +109,9 @@ public:
   vector<pair<double, double> > _RTO;
 
 public:
+  Time srttExpired;
+  uint32_t rdnCnt;
+  
   // cxxx: drqn需要trace的周期性状态
   uint32_t bytesAckedTrace(){
     // 假设初始序列号为0
