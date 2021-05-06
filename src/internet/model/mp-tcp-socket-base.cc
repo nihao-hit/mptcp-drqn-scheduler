@@ -4372,17 +4372,17 @@ void MpTcpSocketBase::scheduleEpoch() {
     if(!state.empty()) {
       // 将经验元组('state', 'action', 'reward', 'next_state', 'timestamp')写入文件
       json stateJson = json::parse(state);
-      json transation = {
+      json transition = {
         {"state", stateJson},
         {"action", selectedSubflow},
         {"reward", reward},
         {"nextState", nextState},
         {"timestamp", Simulator::Now().GetDouble()}
       };
-      std::string transationStr = transation.dump();
-      ofstream of("/home/cx/Desktop/transation.json", std::ios_base::app);
-      of<<transationStr<<endl;
-      NS_LOG_DEBUG(Simulator::Now()<<" Transation: "<<transationStr);
+      std::string transitionStr = transition.dump();
+      ofstream of("/home/cx/Desktop/transition.json", std::ios_base::app);
+      of<<transitionStr<<endl;
+      NS_LOG_DEBUG(Simulator::Now()<<" Transition: "<<transitionStr);
     }
     // 更新state
     state = nextState.dump();
