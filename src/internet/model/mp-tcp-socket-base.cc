@@ -4342,22 +4342,16 @@ void MpTcpSocketBase::scheduleEpoch() {
     double s1Goodput = s1->bytesAckedTrace()/epoch.GetDouble();
     double s2Goodput = s2->bytesAckedTrace()/epoch.GetDouble();
     json nextState = {
-      {
-        {"s1State", {
-          {"goodput", s1Goodput},
-          {"cwnd", s1->cwndTrace.first},
-          {"rtt", s1->rttTrace.first},
-          {"unAckPkts", s1->unAckPktsTrace()},
-          {"retx", s1->retxTrace}
-        }},
-        {"s2State", {
-          {"goodput", s2Goodput},
-          {"cwnd", s2->cwndTrace.first},
-          {"rtt", s2->rttTrace.first},
-          {"unAckPkts", s2->unAckPktsTrace()},
-          {"retx", s2->retxTrace}
-        }}
-      }
+      {"s1Goodput", s1Goodput},
+      {"s1Cwnd", s1->cwndTrace.first},
+      {"s1Rtt", s1->rttTrace.first},
+      {"s1UnAckPkts", s1->unAckPktsTrace()},
+      {"s1Retx", s1->retxTrace},
+      {"s2Goodput", s2Goodput},
+      {"s2Cwnd", s2->cwndTrace.first},
+      {"s2Rtt", s2->rttTrace.first},
+      {"s2UnAckPkts", s2->unAckPktsTrace()},
+      {"s2Retx", s2->retxTrace}
     };
 
     double reward = (s1Goodput + s2Goodput) 
