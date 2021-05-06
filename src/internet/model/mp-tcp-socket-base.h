@@ -301,6 +301,8 @@ protected: // protected variables
   bool server;
 
 public:
+  EventId epochId;
+  
   Time epoch;
   double rewardAlpha;
   double rewardBeta;

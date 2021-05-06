@@ -3394,6 +3394,7 @@ int
 MpTcpSocketBase::Close(void)
 {
   NS_LOG_FUNCTION(this);
+
   if (subflows.size() > 0)
     {
         { // This block could be removed...
@@ -4383,7 +4384,7 @@ void MpTcpSocketBase::scheduleEpoch() {
     // 更新action
     drqnScheduler();
   }
-  Simulator::Schedule(epoch, &MpTcpSocketBase::scheduleEpoch, this);
+  epochId = Simulator::Schedule(epoch, &MpTcpSocketBase::scheduleEpoch, this);
 }
 
 }//namespace ns3

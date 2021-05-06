@@ -206,6 +206,11 @@ void MpTcpBulkSendApplication::StopApplication (void) // Called at time specifie
   NS_LOG_FUNCTION (this);
   NS_LOG_UNCOND(Simulator::Now().GetSeconds() << " ["<<m_node->GetId() << "] Application STOP");
 
+  // cxxx: 与StartApplication()前后呼应，避免采集垃圾时间的经验元组
+  if(m_socket->epochId.IsRunning()){
+    m_socket->epochId.Cancel();
+  }
+
   if (m_socket != 0)
     {
       m_socket->Close ();
@@ -275,7 +280,7 @@ void MpTcpBulkSendApplication::ConnectionSucceeded (Ptr<Socket> socket)
   m_connected = true;
 
   // cxxx: 在应用启动连接建立后调度经验元组采集函数
-  Simulator::ScheduleNow(&MpTcpSocketBase::scheduleEpoch, m_socket);
+  m_socket->epochId = Simulator::ScheduleNow(&MpTcpSocketBase::scheduleEpoch, m_socket);
 
   SendData ();
 }
