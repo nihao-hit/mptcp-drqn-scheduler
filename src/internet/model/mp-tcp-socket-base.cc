@@ -866,10 +866,18 @@ MpTcpSocketBase::ReceivedData(uint8_t sFlowIdx, Ptr<Packet> p, const TcpHeader& 
         {
           OptDataSeqMapping* optDSN = (OptDataSeqMapping*) opt;
           //NS_ASSERT(optDSN->subflowSeqNumber == Seq);
+          NS_LOG_DEBUG(Simulator::Now() <<" SubflowIdx="<<(uint32_t)sFlowIdx
+                                        <<", localAddr="<<sFlow->sAddr<<", remoteAddr="<<sFlow->dAddr
+                                        <<", subSeq(pkt)="<<optDSN->subflowSeqNumber
+                                        <<", rxSeq(state)="<<sFlow->RxSeqNumber
+                                        <<", dataSeq(pkt)="<<optDSN->dataSeqNumber
+                                        <<", dataRxSeq(state)="<<nextRxSequence);
           if (optDSN->subflowSeqNumber == sFlow->RxSeqNumber)
             { /* Received packet is in-sequence at sub-flow level. Now check connection level? */
               if (optDSN->dataSeqNumber == nextRxSequence)
                 {/** Received packet is in-sequence at connection level but in-order at sub-flow level **/
+                  NS_LOG_DEBUG(Simulator::Now()<<" Received packet is in-sequence at connection level and in-order at sub-flow level");
+
                   uint32_t amountRead = recvingBuffer.ReadPacket(p, optDSN->dataLevelLength);
                   if (amountRead == 0)
                     {
@@ -898,6 +906,8 @@ MpTcpSocketBase::ReceivedData(uint8_t sFlowIdx, Ptr<Packet> p, const TcpHeader& 
                 }
               else if (optDSN->dataSeqNumber > nextRxSequence) // there is a gap in dataSeqNumber
                 { /** Received packet is out of sequence at connection level but in-order at sub-flow level **/
+                  NS_LOG_DEBUG(Simulator::Now()<<" Received packet is out of sequence at connection level but in-order at sub-flow level");
+                  
                   stored = StoreUnOrderedData(
                       new DSNMapping(sFlowIdx, optDSN->dataSeqNumber, optDSN->dataLevelLength, optDSN->subflowSeqNumber,
                           mptcpHeader.GetAckNumber().GetValue()/*, p*/));
@@ -914,6 +924,8 @@ MpTcpSocketBase::ReceivedData(uint8_t sFlowIdx, Ptr<Packet> p, const TcpHeader& 
                 }
               else
                 { /** Received packet is duplicated in connection level! */
+                  NS_LOG_DEBUG(Simulator::Now()<<" Received packet is duplicated in connection level!");
+
                   NS_ASSERT(optDSN->dataSeqNumber < nextRxSequence);
                   
                   // cxxx: 冗余调度情况1：冗余包携带重复的数据，递增子流序列号，返回ACK
@@ -927,6 +939,8 @@ MpTcpSocketBase::ReceivedData(uint8_t sFlowIdx, Ptr<Packet> p, const TcpHeader& 
             }
           else if (optDSN->subflowSeqNumber > sFlow->RxSeqNumber)
             { /* Received packet is out of order at sub-flow level */
+              NS_LOG_DEBUG(Simulator::Now()<<" Received packet is out of order at sub-flow level");
+              
               // This condition might occurs when a packet get drop...Does this condition mean that packet should be out of order at connection level? YES
               // cxxx: 冗余调度情况2：连续冗余包中间出现丢包，后到达的冗余包携带重复数据，返回重复ACK
               // NS_ASSERT(optDSN->dataSeqNumber > nextRxSequence);
@@ -940,6 +954,8 @@ MpTcpSocketBase::ReceivedData(uint8_t sFlowIdx, Ptr<Packet> p, const TcpHeader& 
             }
           else if (optDSN->subflowSeqNumber < sFlow->RxSeqNumber)
             { /* Received packet is duplicated at sub-flow level. It should be rejected!*/
+              NS_LOG_DEBUG(Simulator::Now()<<" Received packet is duplicated at sub-flow level. It should be rejected!");
+              
               NS_LOG_INFO("Data received is duplicated in Subflow Layer so it has been rejected! subflowSeq: " << optDSN->subflowSeqNumber << " dataSeq: " << optDSN->dataSeqNumber);
               SendEmptyPacket(sFlowIdx, TcpHeader::ACK);  // Ask for next expected sub-flow sequence number to receive.
             }
@@ -975,6 +991,12 @@ MpTcpSocketBase::ReceivedAck(uint8_t sFlowIdx, Ptr<Packet> packet, const TcpHead
 
   Ptr<MpTcpSubFlow> sFlow = subflows[sFlowIdx];
   uint32_t ack = (mptcpHeader.GetAckNumber()).GetValue();
+
+  // cxxx: 收包详细日志
+  NS_LOG_DEBUG(Simulator::Now()<<" Received ack: subflowIdx="<<(uint32_t)sFlowIdx
+                               <<", localAddr="<<sFlow->sAddr<<", remoteAddr="<<sFlow->dAddr
+                               <<", subAck(pkt)="<<ack<<", highestAck(state)="<<sFlow->highestAck
+                               <<", m_inFastRec="<<sFlow->m_inFastRec<<", m_dupAckCount="<<sFlow->m_dupAckCount);
 
 #ifdef PLOT
   uint32_t tmp = ((ack - sFlow->initialSequnceNumber) / sFlow->MSS) % mod;
@@ -1214,6 +1236,13 @@ MpTcpSocketBase::SendDataPacket(uint8_t sFlowIdx, uint32_t size, bool withAck, u
 #endif
 
   NS_LOG_LOGIC(Simulator::Now().GetSeconds() << " ["<< m_node->GetId()<< "] SendDataPacket->  " << header <<" dSize: " << packetSize<< " sFlow: " << sFlow->routeId);
+  // cxxx: 发包详细日志
+  NS_LOG_DEBUG(Simulator::Now()<<" Sent a Packet: subflowIdx="<<(uint32_t)sFlowIdx
+                               <<", localAddr="<<sFlow->sAddr<<", remoteAddr="<<sFlow->dAddr
+                               <<", subSeq="<<sFlow->TxSeqNumber<<", subAck="<<sFlow->RxSeqNumber
+                               <<", dataSeq="<<(guard ? ptrDSN->dataSeqNumber : ((dataSeq == -1) ? nextTxSequence : dataSeq))
+                               <<", dataLength="<<packetSize<<", type="<<(guard ? "timeout-retransmission" : ((dataSeq == -1) ? "data" : "redundant"))
+                               <<", m_inFastRec="<<sFlow->m_inFastRec<<", m_dupAckCount="<<sFlow->m_dupAckCount);
 
   // Do some updates.....
   sFlow->rtt->SentSeq(SequenceNumber32(sFlow->TxSeqNumber), packetSize); // Notify the RTT of a data packet sent
@@ -1292,6 +1321,12 @@ MpTcpSocketBase::SendAllSubflowsFIN(void)
   return true;
 }
 
+// cxxx: 重传的逻辑
+// ReTxTimeout()->Retransmit()->DoRetransmit(sFlowIdx) // 超时重传
+// ReceivedAck()->DupAck()->ReduceCWND()->DoRetransmit(sFlowIdx, ptrDSN) // 快速重传
+//              ->NewAckNewReno()       ->                               // 快速恢复阶段的重传
+// SendDataPacket() // 超时发生后TxSeq被置为highestAck，发新包阶段会触发重传
+
 void
 MpTcpSocketBase::DoRetransmit(uint8_t sFlowIdx)
 {
@@ -1359,6 +1394,14 @@ MpTcpSocketBase::DoRetransmit(uint8_t sFlowIdx)
 
   m_tcp->SendPacket(pkt, header, sFlow->sAddr, sFlow->dAddr, FindOutputNetDevice(sFlow->sAddr));
 
+  NS_LOG_DEBUG(Simulator::Now()<<" DoRetransmit(sFlowIdx)超时重传: SubflowIdx="<<(uint32_t)sFlowIdx
+                                <<", localAddr="<<sFlow->sAddr<<", remoteAddr="<<sFlow->dAddr
+                                <<", subSeq="<<ptrDSN->subflowSeqNumber
+                                <<", rxSeq="<<sFlow->RxSeqNumber
+                                <<", m_inFastRec="<<sFlow->m_inFastRec
+                                <<", m_dupAckCount="<<sFlow->m_dupAckCount
+                                <<", RTO="<<sFlow->rtt->GetMinRto());
+  
   //reset RTO
   SetReTxTimeout(sFlowIdx);
 
@@ -1425,6 +1468,14 @@ MpTcpSocketBase::DoRetransmit(uint8_t sFlowIdx, DSNMapping* ptrDSN)
 
   // Send Segment to lower layer
   m_tcp->SendPacket(pkt, header, sFlow->sAddr, sFlow->dAddr, FindOutputNetDevice(sFlow->sAddr));
+
+  NS_LOG_DEBUG(Simulator::Now()<<" DoRetransmit(sFlowIdx, ptrDSN)快速重传或快速恢复阶段的重传: SubflowIdx="<<(uint32_t)sFlowIdx
+                                <<", localAddr="<<sFlow->sAddr<<", remoteAddr="<<sFlow->dAddr
+                                <<", subSeq="<<ptrDSN->subflowSeqNumber
+                                <<", rxSeq="<<sFlow->RxSeqNumber
+                                <<", m_inFastRec="<<sFlow->m_inFastRec
+                                <<", m_dupAckCount="<<sFlow->m_dupAckCount);
+
 #ifdef PLOT
   uint32_t tmp = (((ptrDSN->subflowSeqNumber + ptrDSN->dataLevelLength) - sFlow->initialSequnceNumber) / sFlow->MSS) % mod;
   sFlow->RETRANSMIT.push_back(make_pair(Simulator::Now().GetSeconds(), tmp));
@@ -1848,7 +1899,9 @@ MpTcpSocketBase::SendPendingData(uint8_t sFlowIdx)
             Ptr<MpTcpSubFlow> other = subflows[i];
             if(i != lastUsedsFlowIdx && other->srttExpired < Simulator::Now() && other->state == ESTABLISHED) {
               NS_LOG_DEBUG(Simulator::Now()<<" DRQN schedule redundant packet on subflowIdx="<<i
-                                          <<", rdnId="<<other->rdnCnt);
+                                          <<", rdnId="<<other->rdnCnt
+                                          <<", SRTT="<<sFlow->rtt->GetCurrentEstimate()
+                                          <<", RTO="<<sFlow->rtt->GetCurrentEstimate());
               other->rdnCnt++;
               SendDataPacket(i, amountSent, false, nextTxSequence - amountSent);
               // cxxx: 重置SRTT过期时间
@@ -2700,31 +2753,49 @@ MpTcpSocketBase::ReadUnOrderedData()
       DSNMapping *ptrDSN = *current;
       uint32_t sFlowIdx = ptrDSN->subflowIndex;
       Ptr<MpTcpSubFlow> sFlow = subflows[sFlowIdx];
+      NS_LOG_DEBUG(Simulator::Now()<<" ReadUnOrderedData(): SubflowIdx="<<sFlowIdx
+                                    <<", localAddr="<<sFlow->sAddr<<", remoteAddr="<<sFlow->dAddr
+                                    <<", subSeq(pkt)="<<ptrDSN->subflowSeqNumber
+                                    <<", rxSeq(state)="<<sFlow->RxSeqNumber
+                                    <<", dataSeq(pkt)="<<ptrDSN->dataSeqNumber
+                                    <<", dataRxSeq(state)="<<nextRxSequence
+                                    <<", dupAckCnt(pkt)="<<ptrDSN->dupAckCount);
       if ((ptrDSN->dataSeqNumber <= nextRxSequence) /*&& (ptrDSN->subflowSeqNumber == sFlow->RxSeqNumber)*/)
         { /* Stored segment is in-order at connection level */
           NS_ASSERT(ptrDSN->dataSeqNumber == nextRxSequence);
-
-          //uint32_t amount = recvingBuffer->Add(ptrDSN->packet, ptrDSN->dataLevelLength);
-          uint32_t amount = recvingBuffer.Add(ptrDSN->dataLevelLength);
-          if (amount == 0)
-            { // Receive buffer is full.
-              NS_FATAL_ERROR("In our model receive buffer never get full");
-              break;
-            }
-          NS_ASSERT(amount == ptrDSN->dataLevelLength);
-          nextRxSequence += amount;
-
           if (ptrDSN->subflowSeqNumber == sFlow->RxSeqNumber)
             { /** Stored segment is also in-order at sub-flow level */
+              //uint32_t amount = recvingBuffer->Add(ptrDSN->packet, ptrDSN->dataLevelLength);
+              uint32_t amount = recvingBuffer.Add(ptrDSN->dataLevelLength);
+              if (amount == 0)
+                { // Receive buffer is full.
+                  NS_FATAL_ERROR("In our model receive buffer never get full");
+                  break;
+                }
+              NS_ASSERT(amount == ptrDSN->dataLevelLength);
+              nextRxSequence += amount;
+              
               sFlow->RxSeqNumber += amount;
               sFlow->highestAck = std::max(sFlow->highestAck, ptrDSN->acknowledgement - 1);
               //SendEmptyPacket(sFlowIdx, TcpHeader::ACK);
               sFlow->AccumulativeAck = true; //TODO TEMP
+
+              NotifyDataRecv();
             }
           else
-            NS_ASSERT(ptrDSN->subflowSeqNumber < sFlow->RxSeqNumber);
-
-          NotifyDataRecv();
+            {
+              // cxxx: 冗余调度情况3：连续冗余包中间出现丢包，后续冗余包携带重复数据但比最优子流数据先到，
+              // 因此重复数据不再重复，被存储在乱序队列，这是诱因。
+              // 问题是该丢失包的超时重传未被触发，发送方一直处于快速恢复阶段，持续发送数据，dupAckCnt最后高达500，
+              // 而接收方重组时发现子流序列号存在空洞，引发assert error。
+              //
+              // 不知道怎么解决，暂时直接丢弃该包。
+              //
+              // TODO: 这并没有解决实际问题，subflowBuffer被未确认的包填满
+              // MainBuffer is empty - subflowBuffer(20953) sFlow(1) AvailableWindow: 1400 CWND: 1342600 subflow is in timoutRecovery{1} LoopIter: 1
+          
+              // NS_ASSERT(ptrDSN->subflowSeqNumber < sFlow->RxSeqNumber);
+            }
           unOrdered.erase(current);
           delete ptrDSN;
         }
