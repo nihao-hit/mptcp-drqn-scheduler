@@ -147,6 +147,7 @@ int main(int argc, char *argv[])
     Config::SetDefault("ns3::MpTcpSocketBase::Epoch", TimeValue(MilliSeconds(200)));
     Config::SetDefault("ns3::MpTcpSocketBase::RewardAlpha", DoubleValue(0.3));
     Config::SetDefault("ns3::MpTcpSocketBase::RewardBeta", DoubleValue(0.5));
+    Config::SetDefault("ns3::MpTcpSocketBase::LstmSeqLen", UintegerValue(8));
 
     Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1400));
     Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(0));

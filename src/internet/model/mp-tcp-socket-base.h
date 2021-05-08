@@ -307,7 +307,9 @@ public:
   double rewardAlpha;
   double rewardBeta;
 
-  std::string state; // deserialization后的状态
+  uint32_t lstmSeqLen;
+
+  std::vector<std::string> state; // deserialization后的状态
   uint8_t selectedSubflow; // index of array subflows
 
   void drqnScheduler();

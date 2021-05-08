@@ -131,7 +131,12 @@ MpTcpSocketBase::GetTypeId(void)
       .AddAttribute ("RewardBeta", "",
           DoubleValue (0.5),
           MakeDoubleAccessor (&MpTcpSocketBase::rewardBeta),
-          MakeDoubleChecker<double>());
+          MakeDoubleChecker<double>())
+      
+      .AddAttribute ("LstmSeqLen", "",
+          UintegerValue(8),
+          MakeUintegerAccessor(&MpTcpSocketBase::lstmSeqLen),
+          MakeUintegerChecker<uint32_t>());
 
   return tid;
 }
@@ -4435,9 +4440,13 @@ void MpTcpSocketBase::scheduleEpoch() {
     //         s2,a2,r1
     //                  s3,a3,r2
     // 从t3开始收集经验元组(s2,a2,r2,s3,t3)
-    if(!state.empty()) {
+    //
+    // torch.LSTM(): input of shape (seq_len, batch, input_size)
+    if(state.size() == lstmSeqLen) {
       // 将经验元组('state', 'action', 'reward', 'next_state', 'timestamp')写入文件
-      json stateJson = json::parse(state);
+      std::vector<json> stateJson;
+      for(uint32_t i = 0; i < state.size(); i++) stateJson.push_back(json::parse(state[i]));
+      
       json transition = {
         {"state", stateJson},
         {"action", selectedSubflow},
@@ -4451,7 +4460,8 @@ void MpTcpSocketBase::scheduleEpoch() {
       NS_LOG_DEBUG(Simulator::Now()<<" Transition: "<<transitionStr);
     }
     // 更新state
-    state = nextState.dump();
+    if(state.size() == lstmSeqLen) state.erase(state.begin());
+    state.push_back(nextState.dump());
     // 更新action
     drqnScheduler();
   }
