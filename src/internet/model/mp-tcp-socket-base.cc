@@ -4446,12 +4446,15 @@ void MpTcpSocketBase::scheduleEpoch() {
       // 将经验元组('state', 'action', 'reward', 'next_state', 'timestamp')写入文件
       std::vector<json> stateJson;
       for(uint32_t i = 0; i < state.size(); i++) stateJson.push_back(json::parse(state[i]));
+
+      std::vector<json> nextStateJson(stateJson.begin()+1, stateJson.end());
+      nextStateJson.push_back(nextState);
       
       json transition = {
         {"state", stateJson},
         {"action", selectedSubflow},
         {"reward", reward},
-        {"nextState", nextState},
+        {"nextState", nextStateJson},
         {"timestamp", Simulator::Now().GetDouble()}
       };
       std::string transitionStr = transition.dump();
