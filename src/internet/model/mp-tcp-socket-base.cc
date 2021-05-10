@@ -34,7 +34,7 @@
 #define RAND_GAP
 
 NS_LOG_COMPONENT_DEFINE("MpTcpSocketBase");
-using json = nlohmann::json;
+using json = nlohmann::ordered_json;
 using namespace std;
 
 inline void calcCwndTrace(pair<uint32_t, uint32_t>& cwndTrace, uint32_t cwndMsr) {
