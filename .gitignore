@@ -1,5 +1,6 @@
 *.pcap
 *.plt
+*.ipynb
 
 # Created by https://www.toptal.com/developers/gitignore/api/waf,visualstudiocode,python,jupyternotebooks,c++
 # Edit at https://www.toptal.com/developers/gitignore?templates=waf,visualstudiocode,python,jupyternotebooks,c++
