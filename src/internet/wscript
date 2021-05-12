@@ -1,6 +1,7 @@
 ## -*- Mode: python; py-indent-offset: 4; indent-tabs-mode: nil; coding: utf-8; -*-
 import os
 import sys
+import subprocess
 
 from waflib import Options, Logs, Utils, Task
 
@@ -17,6 +18,19 @@ def options(opt):
 
 
 def configure(conf):
+    # added by cxxx
+    rootPath = subprocess.check_output("git rev-parse --show-toplevel".split())[:-1]
+    includePath = os.path.join(rootPath, 'libtorch-cxx11-abi/include')
+    libPath = os.path.join(rootPath, 'libtorch-cxx11-abi/lib')
+
+    conf.env.append_value('INCLUDES', includePath)
+    conf.env.append_value('CXXFLAGS', ['-std=c++14', '-g', '-D_GLIBCXX_USE_CXX11_ABI=1'])
+    conf.env.append_value('LINKFLAGS', ['-L' + libPath, '-Wl,-rpath=' + libPath])
+
+    conf.env['TORCH'] = conf.check(mandatory=True, lib='torch', define_name='TORCH', uselib_store='TORCH')
+    conf.env['TORCH_CPU'] = conf.check(mandatory=True, lib='torch_cpu', define_name='TORCH_CPU', uselib_store='TORCH_CPU')
+    conf.env['C10'] = conf.check(mandatory=True, lib='c10', define_name='C10', uselib_store='C10')
+    
     conf.env['ENABLE_NSC'] = False
 
     # checks for flex and bison, which is needed to build NSCs globaliser
@@ -325,6 +339,9 @@ def build(bld):
         headers.source.append('model/nsc-tcp-l4-protocol.h')
         obj.use.append('DL')
         internet_test.use.append('DL')
+
+    # added by cxxx
+    obj.use.extend(['TORCH', 'TORCH_CPU', 'C10'])
 
     if (bld.env['ENABLE_EXAMPLES']):
         bld.recurse('examples')

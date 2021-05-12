@@ -189,6 +189,3 @@ def configure(conf):
 		conf.env.append_value('CXXFLAGS', debug)
 		conf.env.append_value('CXXFLAGS', warnings)
 		conf.env.append_value('CXXDEFINES', debug_defs)
-		
-		conf.env.append_value('CXXFLAGS', '-std=c++11')
-		conf.env.append_value('CXXFLAGS', '-g')
