@@ -7,11 +7,15 @@
 #ifndef MP_TCP_SOCKET_BASE_H
 #define MP_TCP_SOCKET_BASE_H
 
+#include <memory>
+
 #include "ns3/mp-tcp-typedefs.h"
 #include "ns3/tcp-socket-base.h"
 #include "ns3/gnuplot.h"
 #include "mp-tcp-subflow.h"
 #include "ns3/output-stream-wrapper.h"
+
+#include "torch/script.h"
 
 #define A 1
 #define B 2
@@ -306,14 +310,21 @@ public:
   Time epoch;
   double rewardAlpha;
   double rewardBeta;
-
   uint32_t lstmSeqLen;
+  bool train;
+  string modelPath;
+  Time modelUpdate;
+  uint32_t lstmLayers;
+  uint32_t featNums;
+
+  shared_ptr<torch::jit::script::Module> model;
 
   std::vector<std::string> state; // deserialization后的状态
   uint8_t selectedSubflow; // index of array subflows
 
   void drqnScheduler();
   void scheduleEpoch();
+  void updateModel();
 };
 
 }   //namespace ns3

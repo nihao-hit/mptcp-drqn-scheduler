@@ -279,6 +279,8 @@ void MpTcpBulkSendApplication::ConnectionSucceeded (Ptr<Socket> socket)
   NS_LOG_LOGIC ("MpTcpBulkSendApplication Connection succeeded");
   m_connected = true;
 
+  // cxxx: 调度模型更新函数
+  Simulator::ScheduleNow(&MpTcpSocketBase::updateModel, m_socket);
   // cxxx: 在应用启动连接建立后调度经验元组采集函数
   m_socket->epochId = Simulator::ScheduleNow(&MpTcpSocketBase::scheduleEpoch, m_socket);
 

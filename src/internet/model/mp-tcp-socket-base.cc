@@ -13,6 +13,10 @@
 #include <iomanip>
 #include <fstream>
 #include <cassert>
+#include <random>
+#include <cmath>
+#include <map>
+#include <tuple>
 
 #include "json.hpp"
 
@@ -136,6 +140,31 @@ MpTcpSocketBase::GetTypeId(void)
       .AddAttribute ("LstmSeqLen", "",
           UintegerValue(8),
           MakeUintegerAccessor(&MpTcpSocketBase::lstmSeqLen),
+          MakeUintegerChecker<uint32_t>())
+          
+      .AddAttribute ("Train", "",
+          BooleanValue (true),
+          MakeBooleanAccessor (&MpTcpSocketBase::train),
+          MakeBooleanChecker())
+      
+      .AddAttribute ("ModelPath", "",
+          StringValue ("/home/cx/Desktop/drqn.pt"),
+          MakeStringAccessor (&MpTcpSocketBase::modelPath),
+          MakeStringChecker())
+      
+      .AddAttribute ("ModelUpdate", "",
+          TimeValue (Seconds(60)),
+          MakeTimeAccessor (&MpTcpSocketBase::modelUpdate),
+          MakeTimeChecker())
+      
+      .AddAttribute ("LstmLayers", "",
+          UintegerValue(2),
+          MakeUintegerAccessor(&MpTcpSocketBase::lstmLayers),
+          MakeUintegerChecker<uint32_t>())
+      
+      .AddAttribute ("FeatNums", "",
+          UintegerValue(10),
+          MakeUintegerAccessor(&MpTcpSocketBase::featNums),
           MakeUintegerChecker<uint32_t>());
 
   return tid;
@@ -1922,20 +1951,50 @@ MpTcpSocketBase::SendPendingData(uint8_t sFlowIdx)
   return (nOctetsSent > 0);
 }
 
-// TODO: 暂时使用minRtt调度算法
 void 
 MpTcpSocketBase::drqnScheduler() {
+  static uint32_t step = -1;
+  static const float epsStart = 0.9;
+  static const float epsEnd = 0.05;
+  static const float epsDecay = 200;
+  static const vector<string> orderedState = {"s1Goodput", "s1Cwnd", "s1Rtt", "s1UnAckPkts", "s1Retx", 
+                                              "s2Goodput", "s2Cwnd", "s2Rtt", "s2UnAckPkts", "s2Retx"};
+
   NS_LOG_FUNCTION(this);
-  uint32_t idx = 0;
-  Time srtt = subflows[idx]->rtt->GetCurrentEstimate();
-  NS_LOG_DEBUG(Simulator::Now()<<" Subflow "<<0<<" srtt "<<srtt);
-  for(uint32_t i = 1; i < subflows.size(); i++) {
-    Time tmp = subflows[i]->rtt->GetCurrentEstimate();
-    if(tmp < srtt) idx = i;
-    NS_LOG_DEBUG(Simulator::Now()<<" Subflow "<<i<<" srtt "<<tmp);
+  step++;
+
+  default_random_engine engine(Simulator::Now().GetDouble());
+  uniform_real_distribution<float> realDist(0.0, 1.0);
+  float sample = realDist(engine);
+  float epsThreshold = epsEnd + (epsStart - epsEnd) * exp(-1.0 * step / epsDecay);
+  bool random = false;
+
+  if((train && sample <= epsThreshold) || state.size() != lstmSeqLen) {
+    uniform_int_distribution<int> intDict(0, 1);
+    selectedSubflow = intDict(engine);
+    random = true;
+  } else {
+    vector<double> stateVd; // vector可以转Tensor, vector vector仿佛不可以
+    for(uint32_t i = 0; i < state.size(); i++) {
+      // json::parse()或get()会按alpha序重排序，手动恢复为插入顺序
+      map<string, double> row = json::parse(state[i]).get<map<string, double> >();
+      for(auto& element : orderedState) stateVd.push_back(row[element]);
+    }
+
+    torch::Tensor stateTnsr = torch::from_blob(stateVd.data(), {1, lstmSeqLen, featNums});
+    torch::Tensor h0 = torch::zeros({lstmLayers, 1, 2*featNums});
+    torch::Tensor c0 = torch::zeros({lstmLayers, 1, 2*featNums});
+    vector<torch::jit::IValue> inputs{stateTnsr, h0, c0};
+
+    if(model.get() == nullptr) model = make_shared<torch::jit::Module>(torch::jit::load(modelPath));
+    
+    auto outputs = model->forward(inputs).toTuple(); // 返回值为(x, h_t, c_t)
+    torch::Tensor qTnsr = outputs->elements()[0].toTensor();
+    tuple<torch::Tensor, torch::Tensor> maxRst = qTnsr.max(1);
+    selectedSubflow = get<1>(maxRst).item<int>(); // 执行q值最大的动作
   }
-  NS_LOG_DEBUG(Simulator::Now()<<" DRQN scheduler selected subflow "<<idx);
-  selectedSubflow = idx;
+  NS_LOG_DEBUG(Simulator::Now()<<" DRQN scheduler selected subflow "<<(uint32_t)selectedSubflow
+                               <<", type="<<(random  ? "RandomSchedule" : "ModelSchedule"));
 }
 
 uint8_t
@@ -4469,6 +4528,12 @@ void MpTcpSocketBase::scheduleEpoch() {
     drqnScheduler();
   }
   epochId = Simulator::Schedule(epoch, &MpTcpSocketBase::scheduleEpoch, this);
+}
+
+void MpTcpSocketBase::updateModel() {
+  NS_LOG_FUNCTION(this);
+  model = make_shared<torch::jit::Module>(torch::jit::load(modelPath));
+  Simulator::Schedule(modelUpdate, &MpTcpSocketBase::updateModel, this);
 }
 
 }//namespace ns3
