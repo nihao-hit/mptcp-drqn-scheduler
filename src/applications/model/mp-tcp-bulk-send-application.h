@@ -151,6 +151,10 @@ private:
   void DataSend (Ptr<Socket>, uint32_t); // for socket's SetSendCallback
   void HandlePeerError (Ptr<Socket> socket);
   void HandlePeerClose (Ptr<Socket> socket);
+
+public:
+  Time packetInterval;
+  EventId packetSchedule;
 };
 
 } // namespace ns3

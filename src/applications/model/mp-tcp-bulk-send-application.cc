@@ -103,6 +103,10 @@ MpTcpBulkSendApplication::GetTypeId (void)
                    MakeTypeIdChecker ())
     .AddTraceSource ("Tx", "A new packet is created and is sent",
                      MakeTraceSourceAccessor (&MpTcpBulkSendApplication::m_txTrace))
+    .AddAttribute ("PacketInterval", "",
+          TimeValue (MilliSeconds(40)),
+          MakeTimeAccessor (&MpTcpBulkSendApplication::packetInterval),
+          MakeTimeChecker())
   ;
   return tid;
 }
@@ -296,10 +300,13 @@ void MpTcpBulkSendApplication::ConnectionFailed (Ptr<Socket> socket)
 void MpTcpBulkSendApplication::DataSend (Ptr<Socket>, uint32_t)
 {
   NS_LOG_FUNCTION (this);
-  // TODO: 添加延时函数，模拟突发流量
+  // 添加调度延时，模拟thin stream，
+  // 由于DataSend()有多个入口，因此调度延时发包前判断是否现有调度已过期
   if (m_connected)
     { // Only send new data if the connection has completed
-      Simulator::ScheduleNow(&MpTcpBulkSendApplication::SendData, this);
+      if(packetSchedule.IsExpired()) {
+        packetSchedule = Simulator::Schedule(packetInterval, &MpTcpBulkSendApplication::SendData, this);
+      }
     }
 }
 

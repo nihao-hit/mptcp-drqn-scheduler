@@ -153,6 +153,8 @@ int main(int argc, char *argv[])
     Config::SetDefault("ns3::MpTcpSocketBase::ModelUpdate", TimeValue(Seconds(60)));
     Config::SetDefault("ns3::MpTcpSocketBase::LstmLayers", UintegerValue(2));
     Config::SetDefault("ns3::MpTcpSocketBase::FeatNums", UintegerValue(10));
+    // TODO: 这里发包间隔还需要仔细探究
+    Config::SetDefault("ns3::MpTcpBulkSendApplication::PacketInterval", TimeValue(MilliSeconds(40)));
 
     Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1400));
     Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(0));
