@@ -1935,7 +1935,7 @@ MpTcpSocketBase::SendPendingData(uint8_t sFlowIdx)
               NS_LOG_DEBUG(Simulator::Now()<<" DRQN schedule redundant packet on subflowIdx="<<i
                                           <<", rdnId="<<other->rdnCnt
                                           <<", SRTT="<<sFlow->rtt->GetCurrentEstimate()
-                                          <<", RTO="<<sFlow->rtt->GetCurrentEstimate());
+                                          <<", RTO="<<sFlow->rtt->RetransmitTimeout());
               other->rdnCnt++;
               SendDataPacket(i, amountSent, false, nextTxSequence - amountSent);
               // cxxx: 重置SRTT过期时间
