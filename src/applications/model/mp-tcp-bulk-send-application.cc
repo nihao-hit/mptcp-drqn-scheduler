@@ -34,6 +34,8 @@
 #include "mp-tcp-bulk-send-application.h"
 #include "ns3/string.h"
 
+#include "scratch/topo.h"
+
 NS_LOG_COMPONENT_DEFINE ("MpTcpBulkSendApplication");
 
 namespace ns3 {
@@ -283,6 +285,12 @@ void MpTcpBulkSendApplication::ConnectionSucceeded (Ptr<Socket> socket)
   NS_LOG_LOGIC ("MpTcpBulkSendApplication Connection succeeded");
   m_connected = true;
 
+  // cxxx: 确认ssid与subflow对应关系
+  if(m_socket->m_localAddress == Ipv4Address("10.0.1.1")) {
+    sub1IsSsid = 1;
+  } else {
+    sub1IsSsid = 2;
+  }
   // cxxx: 调度模型更新函数
   Simulator::ScheduleNow(&MpTcpSocketBase::updateModel, m_socket);
   // cxxx: 在应用启动连接建立后调度经验元组采集函数

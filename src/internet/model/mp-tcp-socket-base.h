@@ -255,8 +255,8 @@ protected: // protected variables
   //Ptr<Node>          m_node;
   //Ipv4EndPoint*      m_endPoint;
   //Ptr<TcpL4Protocol> m_mptcp;
-  Ipv4Address        m_localAddress;
-  Ipv4Address        m_remoteAddress;
+  // Ipv4Address        m_localAddress;
+  // Ipv4Address        m_remoteAddress;
   uint16_t           m_localPort;
   uint16_t           m_remotePort;
   uint8_t            currentSublow;
@@ -305,6 +305,9 @@ protected: // protected variables
   bool server;
 
 public:
+  Ipv4Address        m_localAddress;
+  Ipv4Address        m_remoteAddress;
+
   EventId epochId;
   
   Time epoch;

@@ -33,6 +33,8 @@
 #include "ns3/drop-tail-queue.h"
 #include "ns3/object-vector.h"
 
+#include "scratch/topo.h"
+
 //#define PLOT
 #define CXXX_TRACE
 #define RAND_GAP
@@ -1957,8 +1959,8 @@ MpTcpSocketBase::drqnScheduler() {
   static const float epsStart = 0.9;
   static const float epsEnd = 0.05;
   static const float epsDecay = 200;
-  static const vector<string> orderedState = {"s1Goodput", "s1Cwnd", "s1Rtt", "s1UnAckPkts", "s1Retx", 
-                                              "s2Goodput", "s2Cwnd", "s2Rtt", "s2UnAckPkts", "s2Retx"};
+  static const vector<string> orderedState = {"s1IsAssoc", "s1WifiRate", "s1Snr", "s1Rtt", "s1UnAckPkts", "s1Retx", 
+                                              "s2IsAssoc", "s2WifiRate", "s2Snr", "s2Rtt", "s2UnAckPkts", "s2Retx"};
 
   NS_LOG_FUNCTION(this);
   step++;
@@ -4475,24 +4477,26 @@ void MpTcpSocketBase::scheduleEpoch() {
   if(subflows.size() == 2) {
     Ptr<MpTcpSubFlow> s1 = subflows[0];
     Ptr<MpTcpSubFlow> s2 = subflows[1];
-    double s1Goodput = s1->bytesAckedTrace()/epoch.GetDouble();
-    double s2Goodput = s2->bytesAckedTrace()/epoch.GetDouble();
+    uint32_t s1Rtt = s1->rttTrace.first / 1e6; // ms
+    uint32_t s2Rtt = s2->rttTrace.first / 1e6; // ms
     json nextState = {
-      {"s1Goodput", s1Goodput},
-      {"s1Cwnd", s1->cwndTrace.first},
-      {"s1Rtt", s1->rttTrace.first},
+      {"s1IsAssoc", s1IsAssoc},
+      {"s1WifiRate", s1WifiRate},
+      {"s1Snr", s1Snr},
+      {"s1Rtt", s1Rtt},
       {"s1UnAckPkts", s1->unAckPktsTrace()},
       {"s1Retx", s1->retxTrace},
-      {"s2Goodput", s2Goodput},
-      {"s2Cwnd", s2->cwndTrace.first},
-      {"s2Rtt", s2->rttTrace.first},
+
+      {"s2IsAssoc", s2IsAssoc},
+      {"s2WifiRate", s2WifiRate},
+      {"s2Snr", s2Snr},
+      {"s2Rtt", s2Rtt},
       {"s2UnAckPkts", s2->unAckPktsTrace()},
       {"s2Retx", s2->retxTrace}
     };
 
-    double reward = (s1Goodput + s2Goodput) 
-      - rewardAlpha*(s1Goodput*s1->rttTrace.first + s2Goodput*s2->rttTrace.first)/(s1Goodput + s2Goodput)
-      - rewardBeta*(s1->retxTrace + s2->retxTrace);
+    uint32_t reward = -(s1Rtt * s1->rttTrace.second + s2Rtt * s2->rttTrace.second) / (s1->rttTrace.second + s2->rttTrace.second)
+                      - s1->retxTrace - s2->retxTrace;
     //   |________|________|
     //   t1       t2       t3
     //   a1
@@ -4527,6 +4531,14 @@ void MpTcpSocketBase::scheduleEpoch() {
     // 更新action
     drqnScheduler();
   }
+
+  // 重置trace状态，注意：这里不确定有几条子流
+  for(uint32_t i = 0; i < subflows.size(); i++) {
+    Ptr<MpTcpSubFlow> s = subflows[i];
+    s->rttTrace = make_pair(0, 0);
+    s->retxTrace = 0;
+  }
+  
   epochId = Simulator::Schedule(epoch, &MpTcpSocketBase::scheduleEpoch, this);
 }
 

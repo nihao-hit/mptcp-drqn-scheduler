@@ -36,6 +36,8 @@
 #include "ns3/wifi-module.h"
 #include "ns3/bridge-module.h"
 
+#include "topo.h"
+
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("MptcpDrqnSchedulerTopo");
@@ -107,6 +109,20 @@ Assoc(std::string context, Mac48Address value) {
     // }
     // 更新路由
     ////////////////////////////////////////
+
+    ////////////////////////////////////////
+    // trace wifi关联状态
+    // sub1IsSsid:1, ssid:2;
+    // sub1IsSsid:2, ssid:1;
+    if(sub1IsSsid + ssid == 3) {
+        s2IsAssoc = 1;
+    }
+    // sub1IsSsid:1, ssid:1;
+    // sub1IsSsid:2, ssid:2;
+    if(sub1IsSsid + ssid == 2 || sub1IsSsid + ssid == 4) {
+        s1IsAssoc = 1;
+    }
+    ////////////////////////////////////////
 }
 
 // trace sta解关联ap事件
@@ -117,20 +133,45 @@ DeAssoc(std::string context, Mac48Address value) {
     Vector pos = mobility->GetPosition ();
     uint32_t ssid = atoi(context.substr (23, 1).c_str()) + 1;
     NS_LOG_DEBUG(Simulator::Now()<<",\tDeAssoc: ssid_"<<ssid<<",\tPos="<<pos<<",\tBssid="<<value);
+
+    if(sub1IsSsid + ssid == 3) {
+        s2IsAssoc = 0;
+    }
+    if(sub1IsSsid + ssid == 2 || sub1IsSsid + ssid == 4) {
+        s1IsAssoc = 0;
+    }
 }
 
 // trace sta接口rate
 static void
 Rate(std::string context, uint64_t oldValue, uint64_t newValue){
+    oldValue = oldValue / 1e6; // bps to Mbps
+    newValue = newValue / 1e6;
     uint32_t ssid = atoi(context.substr (23, 1).c_str()) + 1;
-    NS_LOG_DEBUG(Simulator::Now()<<"ssid_"<<ssid<<",\toldRate="<<oldValue / 1e6
-                                 <<" (Mbps),\tnewRate="<<newValue / 1e6<<" (Mbps)");
+
+    if(sub1IsSsid + ssid == 3) {
+        s2WifiRate = newValue;
+    }
+    if(sub1IsSsid + ssid == 2 || sub1IsSsid + ssid == 4) {
+        s1WifiRate = newValue;
+    }
+
+    NS_LOG_DEBUG(Simulator::Now()<<"ssid_"<<ssid<<",\toldRate="<<oldValue
+                                 <<" (Mbps),\tnewRate="<<newValue<<" (Mbps)");
 }
 
 static void
 RxOk(std::string context, Ptr<const Packet> packet, double snr, WifiMode mode, enum WifiPreamble preamble)
 {
     uint32_t ssid = atoi(context.substr (23, 1).c_str()) + 1;
+
+    if(sub1IsSsid + ssid == 3) {
+        s2Snr = snr;
+    }
+    if(sub1IsSsid + ssid == 2 || sub1IsSsid + ssid == 4) {
+        s1Snr = snr;
+    }
+
     NS_LOG_DEBUG(Simulator::Now()<<"PhyRxOk: ssid_"<<ssid<<",\tmode="<<mode<<",\tsnr="<<snr<<" (dB)");
 }
 
@@ -160,7 +201,7 @@ int main(int argc, char *argv[])
     Config::SetDefault("ns3::MpTcpSocketBase::ModelPath", StringValue("/home/cx/Desktop/drqn.pt"));
     Config::SetDefault("ns3::MpTcpSocketBase::ModelUpdate", TimeValue(Seconds(60)));
     Config::SetDefault("ns3::MpTcpSocketBase::LstmLayers", UintegerValue(2));
-    Config::SetDefault("ns3::MpTcpSocketBase::FeatNums", UintegerValue(10));
+    Config::SetDefault("ns3::MpTcpSocketBase::FeatNums", UintegerValue(12));
     // TODO: 这里发包间隔还需要仔细探究
     Config::SetDefault("ns3::MpTcpBulkSendApplication::PacketInterval", TimeValue(MilliSeconds(40)));
 

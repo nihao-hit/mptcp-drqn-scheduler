@@ -9,8 +9,8 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
-State = namedtuple('State', ("s1Goodput", "s1Cwnd", "s1Rtt", "s1UnAckPkts", "s1Retx", 
-                             "s2Goodput", "s2Cwnd", "s2Rtt", "s2UnAckPkts", "s2Retx"))
+State = namedtuple('State', ("s1IsAssoc", "s1WifiRate", "s1Snr", "s1Rtt", "s1UnAckPkts", "s1Retx", 
+                             "s2IsAssoc", "s2WifiRate", "s2Snr", "s2Rtt", "s2UnAckPkts", "s2Retx"))
 Transition = namedtuple('Transition', ('state', 'action', 'reward', 'nextState', 'timestamp'))
 
 class ReplayMemory:
@@ -66,11 +66,11 @@ class DRQN(nn.Module):
 if __name__ == '__main__':
     # ################################################################################
     # # 用于调试libtorch
-    # input = torch.rand(128, 8, 10)
+    # input = torch.rand(128, 8, 12)
     # # 注意：batch_first=true只会调整input, output的形状，h_t, c_t不变
-    # h_t = torch.rand(2, 128, 20)
-    # c_t = torch.rand(2, 128, 20)
-    # scriptModel = torch.jit.trace(DRQN(10, 2, 2), (input, h_t, c_t))
+    # h_t = torch.rand(2, 128, 24)
+    # c_t = torch.rand(2, 128, 24)
+    # scriptModel = torch.jit.trace(DRQN(12, 2, 2), (input, h_t, c_t))
     # scriptModel.save('/home/cx/Desktop/drqn.pt')
     # ################################################################################
 
@@ -81,8 +81,8 @@ if __name__ == '__main__':
 
     memory = ReplayMemory(memSize, filePath)
 
-    featNums = 10
-    # lstmSeqLen = 8
+    featNums = 12
+    lstmSeqLen = 8
     lstmLayers = 2
     subNums = 2
     policyNet = DRQN(featNums=featNums, lstmLayers=lstmLayers, subNums=subNums)
@@ -156,10 +156,10 @@ if __name__ == '__main__':
         targetNet.load_state_dict(policyNet.state_dict())
 
         # 序列化targetNet
-        input = torch.rand(128, 8, 10)
+        input = torch.rand(batchSize, lstmSeqLen, featNums)
         # 注意：batch_first=true只会调整input, output的形状，h_t, c_t不变
-        h_t = torch.rand(2, 128, 20)
-        c_t = torch.rand(2, 128, 20)
+        h_t = torch.rand(lstmLayers, batchSize, 2*featNums)
+        c_t = torch.rand(lstmLayers, batchSize, 2*featNums)
         scriptModel = torch.jit.trace(targetNet, (input, h_t, c_t))
         scriptModel.save('/home/cx/Desktop/drqn.pt')
     ################################################################################
