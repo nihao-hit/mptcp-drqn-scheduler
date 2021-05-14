@@ -123,7 +123,8 @@ DeAssoc(std::string context, Mac48Address value) {
 static void
 Rate(std::string context, uint64_t oldValue, uint64_t newValue){
     uint32_t ssid = atoi(context.substr (23, 1).c_str()) + 1;
-    NS_LOG_DEBUG(Simulator::Now()<<"ssid_"<<ssid<<",\toldRate="<<oldValue<<",\tnewRate"<<newValue);
+    NS_LOG_DEBUG(Simulator::Now()<<"ssid_"<<ssid<<",\toldRate="<<oldValue / 1e6
+                                 <<" (Mbps),\tnewRate="<<newValue / 1e6<<" (Mbps)");
 }
 
 int main(int argc, char *argv[])
@@ -532,7 +533,6 @@ int main(int argc, char *argv[])
     Config::Connect("/NodeList/0/DeviceList/[0-1]/$ns3::WifiNetDevice/Mac/$ns3::StaWifiMac/Assoc", MakeCallback(&Assoc));
     Config::Connect("/NodeList/0/DeviceList/[0-1]/$ns3::WifiNetDevice/Mac/$ns3::StaWifiMac/DeAssoc", MakeCallback(&DeAssoc));
 
-    // TODO: 为ArfWifiManager添加Rate trace
     Config::Connect("/NodeList/0/DeviceList/[0-1]/$ns3::WifiNetDevice/RemoteStationManager/$ns3::ArfWifiManager/Rate", MakeCallback(&Rate));
 
     phy1.EnablePcap("MptcpDrqnSchedulerTopo", ssid1StaDevice);

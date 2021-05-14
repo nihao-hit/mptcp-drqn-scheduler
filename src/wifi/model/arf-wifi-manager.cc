@@ -68,11 +68,14 @@ ArfWifiManager::GetTypeId (void)
                    UintegerValue (10),
                    MakeUintegerAccessor (&ArfWifiManager::m_successThreshold),
                    MakeUintegerChecker<uint32_t> ())
+    .AddTraceSource ("Rate",
+                     "Traced value for rate changes (b/s)",
+                     MakeTraceSourceAccessor (&ArfWifiManager::m_currentRate))
   ;
   return tid;
 }
 
-ArfWifiManager::ArfWifiManager ()
+ArfWifiManager::ArfWifiManager () : WifiRemoteStationManager (), m_currentRate (0)
 {
   NS_LOG_FUNCTION (this);
 }
@@ -204,6 +207,14 @@ ArfWifiManager::DoGetDataTxVector (WifiRemoteStation *st, uint32_t size)
 {
   NS_LOG_FUNCTION (this << st << size);
   ArfWifiRemoteStation *station = (ArfWifiRemoteStation *) st;
+
+  WifiMode mode = GetSupported (station, station->m_rate);
+  if (m_currentRate != mode.GetDataRate ())
+    {
+      NS_LOG_DEBUG ("New datarate: " << mode.GetDataRate ());
+      m_currentRate = mode.GetDataRate ();
+    }
+
   return WifiTxVector (GetSupported (station, station->m_rate), GetDefaultTxPowerLevel (), GetLongRetryCount (station), GetShortGuardInterval (station), Min (GetNumberOfReceiveAntennas (station),GetNumberOfTransmitAntennas()), GetNumberOfTransmitAntennas (station), GetStbc (station));
 }
 WifiTxVector
