@@ -127,6 +127,13 @@ Rate(std::string context, uint64_t oldValue, uint64_t newValue){
                                  <<" (Mbps),\tnewRate="<<newValue / 1e6<<" (Mbps)");
 }
 
+static void
+RxOk(std::string context, Ptr<const Packet> packet, double snr, WifiMode mode, enum WifiPreamble preamble)
+{
+    uint32_t ssid = atoi(context.substr (23, 1).c_str()) + 1;
+    NS_LOG_DEBUG(Simulator::Now()<<"PhyRxOk: ssid_"<<ssid<<",\tmode="<<mode<<",\tsnr="<<snr<<" (dB)");
+}
+
 int main(int argc, char *argv[])
 {
     ////////////////////////////////////////////////////////////////////////////////
@@ -535,6 +542,8 @@ int main(int argc, char *argv[])
 
     Config::Connect("/NodeList/0/DeviceList/[0-1]/$ns3::WifiNetDevice/RemoteStationManager/$ns3::ArfWifiManager/Rate", MakeCallback(&Rate));
 
+    Config::Connect("/NodeList/0/DeviceList/[0-1]/Phy/State/RxOk", MakeCallback (&RxOk));
+    
     phy1.EnablePcap("MptcpDrqnSchedulerTopo", ssid1StaDevice);
     phy2.EnablePcap("MptcpDrqnSchedulerTopo", ssid2StaDevice);
     csma.EnablePcap("MptcpDrqnSchedulerTopo", lan3Devices.Get(1));

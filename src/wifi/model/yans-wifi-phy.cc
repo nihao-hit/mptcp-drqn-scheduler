@@ -805,7 +805,11 @@ YansWifiPhy::EndReceive (Ptr<Packet> packet, Ptr<InterferenceHelper::Event> even
       double signalDbm = RatioToDb (event->GetRxPowerW ()) + 30;
       double noiseDbm = RatioToDb (event->GetRxPowerW () / snrPer.snr) - GetRxNoiseFigure () + 30;
       NotifyMonitorSniffRx (packet, (uint16_t)GetChannelFrequencyMhz (), GetChannelNumber (), dataRate500KbpsUnits, isShortPreamble, signalDbm, noiseDbm);
-      m_state->SwitchFromRxEndOk (packet, snrPer.snr, event->GetPayloadMode (), event->GetPreambleType ());
+      
+      // cxxx: 将第二个实参的snr改为RatioToDb(snr)
+      // 此处的snr = signal / noise, 且signal与noise单位都为W
+      // m_state->SwitchFromRxEndOk (packet, snrPer.snr, event->GetPayloadMode (), event->GetPreambleType ());
+      m_state->SwitchFromRxEndOk (packet, RatioToDb(snrPer.snr), event->GetPayloadMode (), event->GetPreambleType ());
     }
   else
     {
