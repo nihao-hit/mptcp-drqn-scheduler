@@ -43,10 +43,6 @@ NS_LOG_COMPONENT_DEFINE("MpTcpSocketBase");
 using json = nlohmann::ordered_json;
 using namespace std;
 
-inline void calcCwndTrace(pair<uint32_t, uint32_t>& cwndTrace, uint32_t cwndMsr) {
-  cwndTrace.first = (cwndTrace.first * cwndTrace.second + cwndMsr) / ++cwndTrace.second;
-}
-
 namespace ns3
 {
 NS_OBJECT_ENSURE_REGISTERED(MpTcpSocketBase);
@@ -2109,11 +2105,6 @@ MpTcpSocketBase::ReduceCWND(uint8_t sFlowIdx, DSNMapping* ptrDSN)
   reTxTrack.push_back(make_pair(Simulator::Now().GetSeconds(), sFlow->cwnd));
   sFlow->ssthreshtrack.push_back(make_pair(Simulator::Now().GetSeconds(), sFlow->ssthresh));
 #endif
-
-#ifdef CXXX_TRACE
-  // cxxx: 拥塞控制算法的快速重传阶段
-  calcCwndTrace(sFlow->cwndTrace, sFlow->cwnd.Get());
-#endif
 }
 
 /** Retransmit timeout */
@@ -2931,10 +2922,6 @@ MpTcpSocketBase::DupAck(uint8_t sFlowIdx, DSNMapping* ptrDSN)
       sFlow->ssthreshtrack.push_back(make_pair(Simulator::Now().GetSeconds(), sFlow->ssthresh));
 #endif
 
-#ifdef CXXX_TRACE
-      // cxxx: 拥塞控制算法的快速恢复阶段，且继续收到重复ack
-      calcCwndTrace(sFlow->cwndTrace, sFlow->cwnd.Get());
-#endif
       NS_LOG_WARN ("DupAck-> FastRecovery. Increase cwnd by one MSS, from " << sFlow->cwnd.Get() <<" -> " << sFlow->cwnd << " AvailableWindow: " << AvailableWindow(sFlowIdx));
       FastRecoveries++;
       // Send more data into pipe if possible to get ACK clock going
@@ -4016,10 +4003,6 @@ MpTcpSocketBase::OpenCWND(uint8_t sFlowIdx, uint32_t ackedBytes)
       sFlow->_ss.push_back(make_pair(Simulator::Now().GetSeconds(), TimeScale));
 #endif
 
-#ifdef CXXX_TRACE
-      calcCwndTrace(sFlow->cwndTrace, sFlow->cwnd.Get());
-#endif
-
       NS_LOG_WARN ("Congestion Control (Slow Start) increment by one segmentSize");
     }
   else // cxxx: 拥塞控制算法的拥塞避免阶段
@@ -4137,10 +4120,6 @@ MpTcpSocketBase::OpenCWND(uint8_t sFlowIdx, uint32_t ackedBytes)
         }
 #ifdef PLOT
       sFlow->_ca.push_back(make_pair(Simulator::Now().GetSeconds(), TimeScale));
-#endif
-
-#ifdef CXXX_TRACE
-      calcCwndTrace(sFlow->cwndTrace, sFlow->cwnd.Get());
 #endif
     }
 }
