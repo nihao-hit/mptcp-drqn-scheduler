@@ -4458,21 +4458,41 @@ void MpTcpSocketBase::scheduleEpoch() {
     Ptr<MpTcpSubFlow> s2 = subflows[1];
     uint32_t s1Rtt = s1->rttTrace.first / 1e6; // ms
     uint32_t s2Rtt = s2->rttTrace.first / 1e6; // ms
-    json nextState = {
-      {"s1IsAssoc", s1IsAssoc},
-      {"s1WifiRate", s1WifiRate},
-      {"s1Snr", s1Snr},
-      {"s1Rtt", s1Rtt},
-      {"s1UnAckPkts", s1->unAckPktsTrace()},
-      {"s1Retx", s1->retxTrace},
+    NS_ASSERT(sub1IsSsid != 0);
+    json nextState;
+    if(sub1IsSsid == 1) {
+      nextState = {
+        {"s1IsAssoc", ssid1IsAssoc},
+        {"s1WifiRate", ssid1WifiRate},
+        {"s1Snr", ssid1Snr},
+        {"s1Rtt", s1Rtt},
+        {"s1UnAckPkts", s1->unAckPktsTrace()},
+        {"s1Retx", s1->retxTrace},
 
-      {"s2IsAssoc", s2IsAssoc},
-      {"s2WifiRate", s2WifiRate},
-      {"s2Snr", s2Snr},
-      {"s2Rtt", s2Rtt},
-      {"s2UnAckPkts", s2->unAckPktsTrace()},
-      {"s2Retx", s2->retxTrace}
-    };
+        {"s2IsAssoc", ssid2IsAssoc},
+        {"s2WifiRate", ssid2WifiRate},
+        {"s2Snr", ssid2Snr},
+        {"s2Rtt", s2Rtt},
+        {"s2UnAckPkts", s2->unAckPktsTrace()},
+        {"s2Retx", s2->retxTrace}
+      };
+    } else {
+      nextState = {
+        {"s1IsAssoc", ssid2IsAssoc},
+        {"s1WifiRate", ssid2WifiRate},
+        {"s1Snr", ssid2Snr},
+        {"s1Rtt", s1Rtt},
+        {"s1UnAckPkts", s1->unAckPktsTrace()},
+        {"s1Retx", s1->retxTrace},
+
+        {"s2IsAssoc", ssid1IsAssoc},
+        {"s2WifiRate", ssid1WifiRate},
+        {"s2Snr", ssid1Snr},
+        {"s2Rtt", s2Rtt},
+        {"s2UnAckPkts", s2->unAckPktsTrace()},
+        {"s2Retx", s2->retxTrace}
+      };
+    }
 
     uint32_t reward = -(s1Rtt * s1->rttTrace.second + s2Rtt * s2->rttTrace.second) / (s1->rttTrace.second + s2->rttTrace.second)
                       - s1->retxTrace - s2->retxTrace;

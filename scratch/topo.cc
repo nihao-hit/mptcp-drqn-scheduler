@@ -16,6 +16,7 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include <iostream>
 
 #include "ns3/yans-wifi-helper.h"
 #include "ns3/position-allocator.h"
@@ -42,12 +43,26 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("MptcpDrqnSchedulerTopo");
 
+static ofstream of("/home/cx/Desktop/sta-move.csv");
+static void
+printStaMoveStatus() {
+    of<<Simulator::Now().GetInteger()<<","<<posX<<","<<posY<<","
+            <<ssid1IsAssoc<<","<<ssid1WifiRate<<","<<ssid1Snr<<","
+            <<ssid2IsAssoc<<","<<ssid2WifiRate<<","<<ssid2Snr<<endl;
+    Simulator::Schedule(MilliSeconds(500), &printStaMoveStatus);
+}
+
+// TODO: 不知道为什么，CourseChange()并没有被触发？
 // // trace sta移动
 // static void 
 // CourseChange (std::string context, Ptr<const MobilityModel> mobility)
 // {
 //   Vector pos = mobility->GetPosition ();
 //   Vector vel = mobility->GetVelocity ();
+
+//   posX = pos.x;
+//   posY = pos.y;
+
 //   std::cout << Simulator::Now () << ", POS: x=" << pos.x << ",\ty=" << pos.y
 //             << ";\tVEL: x=" << vel.x << ",\ty=" << vel.y << std::endl;
 // }
@@ -112,16 +127,17 @@ Assoc(std::string context, Mac48Address value) {
 
     ////////////////////////////////////////
     // trace wifi关联状态
-    // sub1IsSsid:1, ssid:2;
-    // sub1IsSsid:2, ssid:1;
-    if(sub1IsSsid + ssid == 3) {
-        s2IsAssoc = 1;
+    if(ssid == 1) {
+        ssid1IsAssoc = 1;
+    } else {
+        ssid2IsAssoc = 1;
     }
-    // sub1IsSsid:1, ssid:1;
-    // sub1IsSsid:2, ssid:2;
-    if(sub1IsSsid + ssid == 2 || sub1IsSsid + ssid == 4) {
-        s1IsAssoc = 1;
-    }
+    ////////////////////////////////////////
+
+    ////////////////////////////////////////
+    // trace sta位置
+    posX = pos.x;
+    posY = pos.y;
     ////////////////////////////////////////
 }
 
@@ -134,12 +150,13 @@ DeAssoc(std::string context, Mac48Address value) {
     uint32_t ssid = atoi(context.substr (23, 1).c_str()) + 1;
     NS_LOG_DEBUG(Simulator::Now()<<",\tDeAssoc: ssid_"<<ssid<<",\tPos="<<pos<<",\tBssid="<<value);
 
-    if(sub1IsSsid + ssid == 3) {
-        s2IsAssoc = 0;
+    if(ssid == 1) {
+        ssid1IsAssoc = 0;
+    } else {
+        ssid2IsAssoc = 0;
     }
-    if(sub1IsSsid + ssid == 2 || sub1IsSsid + ssid == 4) {
-        s1IsAssoc = 0;
-    }
+    posX = pos.x;
+    posY = pos.y;
 }
 
 // trace sta接口rate
@@ -149,11 +166,10 @@ Rate(std::string context, uint64_t oldValue, uint64_t newValue){
     newValue = newValue / 1e6;
     uint32_t ssid = atoi(context.substr (23, 1).c_str()) + 1;
 
-    if(sub1IsSsid + ssid == 3) {
-        s2WifiRate = newValue;
-    }
-    if(sub1IsSsid + ssid == 2 || sub1IsSsid + ssid == 4) {
-        s1WifiRate = newValue;
+    if(ssid == 1) {
+        ssid1WifiRate = newValue;
+    } else {
+        ssid2WifiRate = newValue;
     }
 
     NS_LOG_DEBUG(Simulator::Now()<<"ssid_"<<ssid<<",\toldRate="<<oldValue
@@ -165,11 +181,10 @@ RxOk(std::string context, Ptr<const Packet> packet, double snr, WifiMode mode, e
 {
     uint32_t ssid = atoi(context.substr (23, 1).c_str()) + 1;
 
-    if(sub1IsSsid + ssid == 3) {
-        s2Snr = snr;
-    }
-    if(sub1IsSsid + ssid == 2 || sub1IsSsid + ssid == 4) {
-        s1Snr = snr;
+    if(ssid == 1) {
+        ssid1Snr = snr;
+    } else {
+        ssid2Snr = snr;
     }
 
     NS_LOG_DEBUG(Simulator::Now()<<"PhyRxOk: ssid_"<<ssid<<",\tmode="<<mode<<",\tsnr="<<snr<<" (dB)");
@@ -588,11 +603,16 @@ int main(int argc, char *argv[])
     phy1.EnablePcap("MptcpDrqnSchedulerTopo", ssid1StaDevice);
     phy2.EnablePcap("MptcpDrqnSchedulerTopo", ssid2StaDevice);
     csma.EnablePcap("MptcpDrqnSchedulerTopo", lan3Devices.Get(1));
+
+    Simulator::Schedule(MilliSeconds(500), &printStaMoveStatus);
     // trace
     ////////////////////////////////////////////////////////////////////////////////
 
     Simulator::Stop(Seconds(15.0));
     Simulator::Run();
     Simulator::Destroy();
+
+    of.close();
+
     return 0;
 }
