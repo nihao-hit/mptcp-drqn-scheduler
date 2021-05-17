@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
 {
     ////////////////////////////////////////////////////////////////////////////////
     // 命令行参数及全局配置
-    LogComponentEnable("MptcpDrqnSchedulerTopo", LOG_DEBUG);
+    // LogComponentEnable("MptcpDrqnSchedulerTopo", LOG_DEBUG);
     // LogComponentEnable("MpTcpSocketBase", LOG_DEBUG);
 
     // Set the maximum wireless range to 30 meters
