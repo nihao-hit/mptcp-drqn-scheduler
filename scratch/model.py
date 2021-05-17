@@ -59,7 +59,7 @@ class DRQN(nn.Module):
         _, (h_t, c_t) = self.lstm(x, (h_t, c_t))
         x = F.relu(self.linear1(h_t[-1]))
         x = F.relu(self.linear2(x))
-        x = F.relu(self.linear3(x))
+        x = self.linear3(x) # drqn输出层不使用激活函数：https://www.coder.work/article/4754238
         # 这里返回的x不是action向量，而是action向量对应的Q值向量
         return x, h_t, c_t
 
