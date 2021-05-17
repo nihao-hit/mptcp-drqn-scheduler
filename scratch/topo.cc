@@ -214,7 +214,6 @@ int main(int argc, char *argv[])
     Config::SetDefault("ns3::MpTcpSocketBase::LstmSeqLen", UintegerValue(8));
     Config::SetDefault("ns3::MpTcpSocketBase::Train", BooleanValue(true));
     Config::SetDefault("ns3::MpTcpSocketBase::ModelPath", StringValue("/home/cx/Desktop/drqn.pt"));
-    Config::SetDefault("ns3::MpTcpSocketBase::ModelUpdate", TimeValue(Seconds(60)));
     Config::SetDefault("ns3::MpTcpSocketBase::LstmLayers", UintegerValue(2));
     Config::SetDefault("ns3::MpTcpSocketBase::FeatNums", UintegerValue(12));
     // TODO: 这里发包间隔还需要仔细探究

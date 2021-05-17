@@ -150,11 +150,6 @@ MpTcpSocketBase::GetTypeId(void)
           MakeStringAccessor (&MpTcpSocketBase::modelPath),
           MakeStringChecker())
       
-      .AddAttribute ("ModelUpdate", "",
-          TimeValue (Seconds(60)),
-          MakeTimeAccessor (&MpTcpSocketBase::modelUpdate),
-          MakeTimeChecker())
-      
       .AddAttribute ("LstmLayers", "",
           UintegerValue(2),
           MakeUintegerAccessor(&MpTcpSocketBase::lstmLayers),
@@ -4546,12 +4541,6 @@ void MpTcpSocketBase::scheduleEpoch() {
   }
   
   epochId = Simulator::Schedule(epoch, &MpTcpSocketBase::scheduleEpoch, this);
-}
-
-void MpTcpSocketBase::updateModel() {
-  NS_LOG_FUNCTION(this);
-  model = make_shared<torch::jit::Module>(torch::jit::load(modelPath));
-  Simulator::Schedule(modelUpdate, &MpTcpSocketBase::updateModel, this);
 }
 
 }//namespace ns3

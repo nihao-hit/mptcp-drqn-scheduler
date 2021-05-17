@@ -316,7 +316,6 @@ public:
   uint32_t lstmSeqLen;
   bool train;
   string modelPath;
-  Time modelUpdate;
   uint32_t lstmLayers;
   uint32_t featNums;
 
@@ -327,7 +326,6 @@ public:
 
   void drqnScheduler();
   void scheduleEpoch();
-  void updateModel();
 };
 
 }   //namespace ns3

@@ -291,8 +291,6 @@ void MpTcpBulkSendApplication::ConnectionSucceeded (Ptr<Socket> socket)
   } else {
     sub1IsSsid = 2;
   }
-  // cxxx: 调度模型更新函数
-  Simulator::ScheduleNow(&MpTcpSocketBase::updateModel, m_socket);
   // cxxx: 在应用启动连接建立后调度经验元组采集函数
   m_socket->epochId = Simulator::ScheduleNow(&MpTcpSocketBase::scheduleEpoch, m_socket);
 
