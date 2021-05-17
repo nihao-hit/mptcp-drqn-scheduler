@@ -153,8 +153,8 @@ private:
   void HandlePeerClose (Ptr<Socket> socket);
 
 public:
-  Time packetInterval;
-  EventId packetSchedule;
+  Time dataIntervalUpper;
+  Time dataIntervalLower;
 };
 
 } // namespace ns3

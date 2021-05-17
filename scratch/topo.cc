@@ -216,8 +216,12 @@ int main(int argc, char *argv[])
     Config::SetDefault("ns3::MpTcpSocketBase::ModelPath", StringValue("/home/cx/Desktop/drqn.pt"));
     Config::SetDefault("ns3::MpTcpSocketBase::LstmLayers", UintegerValue(2));
     Config::SetDefault("ns3::MpTcpSocketBase::FeatNums", UintegerValue(12));
-    // TODO: 这里发包间隔还需要仔细探究
-    Config::SetDefault("ns3::MpTcpBulkSendApplication::PacketInterval", TimeValue(MilliSeconds(40)));
+
+    // TODO: 模拟thin stream的应用层数据传输间隔设置还需要探究
+    Config::SetDefault("ns3::MpTcpBulkSendApplication::DataIntervalUpper", TimeValue(MilliSeconds(200)));
+    Config::SetDefault("ns3::MpTcpBulkSendApplication::DataIntervalLower", TimeValue(MilliSeconds(100)));
+    // SendSize：应用层一次数据传输大小
+    Config::SetDefault("ns3::MpTcpBulkSendApplication::SendSize", UintegerValue(1400 * 5));
 
     Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1400));
     Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(0));
@@ -225,6 +229,10 @@ int main(int argc, char *argv[])
     Config::SetDefault("ns3::DropTailQueue::MaxPackets", UintegerValue(100));
     Config::SetDefault("ns3::TcpL4Protocol::SocketType", TypeIdValue(MpTcpSocketBase::GetTypeId()));
     Config::SetDefault("ns3::MpTcpSocketBase::MaxSubflows", UintegerValue(8)); // Sink
+    
+    // 修改ns3伪随机数种子或修改伪随机数序列起始序列号
+    RngSeedManager::SetSeed(1);
+    RngSeedManager::SetRun(1);
     // 命令行参数及全局配置
     ////////////////////////////////////////////////////////////////////////////////
 

@@ -34,7 +34,9 @@
 #include "mp-tcp-bulk-send-application.h"
 #include "ns3/string.h"
 
+#include "ns3/random-variable-stream.h"
 #include "scratch/topo.h"
+
 
 NS_LOG_COMPONENT_DEFINE ("MpTcpBulkSendApplication");
 
@@ -105,9 +107,13 @@ MpTcpBulkSendApplication::GetTypeId (void)
                    MakeTypeIdChecker ())
     .AddTraceSource ("Tx", "A new packet is created and is sent",
                      MakeTraceSourceAccessor (&MpTcpBulkSendApplication::m_txTrace))
-    .AddAttribute ("PacketInterval", "",
-          TimeValue (MilliSeconds(40)),
-          MakeTimeAccessor (&MpTcpBulkSendApplication::packetInterval),
+    .AddAttribute ("DataIntervalUpper", "",
+          TimeValue (MilliSeconds(200)),
+          MakeTimeAccessor (&MpTcpBulkSendApplication::dataIntervalUpper),
+          MakeTimeChecker())
+    .AddAttribute ("DataIntervalLower", "",
+          TimeValue (MilliSeconds(100)),
+          MakeTimeAccessor (&MpTcpBulkSendApplication::dataIntervalLower),
           MakeTimeChecker())
   ;
   return tid;
@@ -184,7 +190,8 @@ void MpTcpBulkSendApplication::StartApplication (void) // Called at time specifi
           m_socket->SetDupAckThresh(m_dupack);
           m_socket->SetConnectCallback(MakeCallback(&MpTcpBulkSendApplication::ConnectionSucceeded, this),
               MakeCallback(&MpTcpBulkSendApplication::ConnectionFailed, this));
-          m_socket->SetDataSentCallback(MakeCallback(&MpTcpBulkSendApplication::DataSend, this));
+          // cxxx: 只保留ConnectionSucceeded()->SendData()一个入口
+          // m_socket->SetDataSentCallback(MakeCallback(&MpTcpBulkSendApplication::DataSend, this));
           m_socket->SetCloseCallbacks (
             MakeCallback (&MpTcpBulkSendApplication::HandlePeerClose, this),
             MakeCallback (&MpTcpBulkSendApplication::HandlePeerError, this));
@@ -196,12 +203,7 @@ void MpTcpBulkSendApplication::StartApplication (void) // Called at time specifi
           NS_LOG_UNCOND("Connection is failed");
         }
     }
-  // TODO: 这里调用的SendData()与ConnectionSucceeded()回调，DataSend()回调中调用是不是重复了，
-  // 这里与ConnectionSucceeded()回调都只调用一次，
-  // SendPendingData()->NotifyDataSent()->DataSend()
-  // SendPendingData()被以下函数调用：SendBufferedData(), ReceveidAck(routeId), NewAck(routeID) & DupAck(routeID), ProcessSynSent(routeId)
-  // 因此一次SendData()可能触发多次SendData()
-  if (m_connected)
+  if (m_connected) // cxxx: 这里条件理论上不可能成立
     {
       SendData ();
     }
@@ -252,23 +254,19 @@ void MpTcpBulkSendApplication::SendData (void)
   NS_LOG_FUNCTION (this);
   NS_LOG_DEBUG("m_totBytes: " << m_totBytes << " maxByte: " << m_maxBytes << " GetTxAvailable: " << m_socket->GetTxAvailable() << " SendSize: " << m_sendSize);
 
+  uint32_t toSend = m_sendSize;
+  if (m_maxBytes > 0)
+    {
+      toSend = std::min(m_sendSize, m_maxBytes - m_totBytes);
+    }
   //while (m_totBytes < m_maxBytes && m_socket->GetTxAvailable())
-  while ((m_maxBytes == 0 && m_socket->GetTxAvailable()) || (m_totBytes < m_maxBytes && m_socket->GetTxAvailable()))
+  while(toSend != 0)
     { // Time to send more new data into MPTCP socket buffer
-      uint32_t toSend = m_sendSize;
-      if (m_maxBytes > 0)
-        {
-          uint32_t tmp = std::min(m_sendSize, m_maxBytes - m_totBytes);
-          toSend = std::min(tmp, m_socket->GetTxAvailable());
-        }
-      else
-        {
-          toSend = std::min(m_sendSize, m_socket->GetTxAvailable());
-        }
           //toSend = std::min(toSend, m_bufferSize);
           //int actual = m_socket->FillBuffer(&m_data[toSend], toSend); // TODO Change m_totalBytes to toSend
           int actual = m_socket->FillBuffer(toSend); // TODO Change m_totalBytes to toSend
           m_totBytes += actual;
+          toSend -= actual;
           NS_LOG_DEBUG("toSend: " << toSend << " actual: " << actual << " totalByte: " << m_totBytes);
           m_socket->SendBufferedData();
     }
@@ -277,6 +275,12 @@ void MpTcpBulkSendApplication::SendData (void)
       m_socket->Close();
       m_connected = false;
     }
+  if(m_connected) {
+    static Ptr<UniformRandomVariable> random = CreateObject<UniformRandomVariable> ();
+    uint32_t dataInterval = random->GetInteger(dataIntervalLower.GetInteger(), 
+                                               dataIntervalUpper.GetInteger());
+    Simulator::Schedule(Time(dataInterval), &MpTcpBulkSendApplication::SendData, this);
+  }
 }
 
 void MpTcpBulkSendApplication::ConnectionSucceeded (Ptr<Socket> socket)
@@ -294,6 +298,13 @@ void MpTcpBulkSendApplication::ConnectionSucceeded (Ptr<Socket> socket)
   // cxxx: 在应用启动连接建立后调度经验元组采集函数
   m_socket->epochId = Simulator::ScheduleNow(&MpTcpSocketBase::scheduleEpoch, m_socket);
 
+  // cxxx: 只保留该SendData()一个入口，关闭DataSend()回调入口，StartApplication()入口理论上不可能成立
+  //
+  // 如果DataSend()回调入口存在，一次SendData()可能触发多次SendData()
+  // SendData()->SendBufferedData()->SendPendingData()->NotifyDataSent()->DataSend()->SendData()
+  //        ReceivedAck()->NewAck()->
+  //                     ->DupAck()->
+  //                 ProcessSynSent->
   SendData ();
 }
 
@@ -306,13 +317,9 @@ void MpTcpBulkSendApplication::ConnectionFailed (Ptr<Socket> socket)
 void MpTcpBulkSendApplication::DataSend (Ptr<Socket>, uint32_t)
 {
   NS_LOG_FUNCTION (this);
-  // 添加调度延时，模拟thin stream，
-  // 由于DataSend()有多个入口，因此调度延时发包前判断是否现有调度已过期
   if (m_connected)
     { // Only send new data if the connection has completed
-      if(packetSchedule.IsExpired()) {
-        packetSchedule = Simulator::Schedule(packetInterval, &MpTcpBulkSendApplication::SendData, this);
-      }
+      Simulator::ScheduleNow(&MpTcpBulkSendApplication::SendData, this);
     }
 }
 
