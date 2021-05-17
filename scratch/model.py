@@ -1,3 +1,4 @@
+
 import random
 from collections import namedtuple
 from itertools import count
@@ -113,11 +114,11 @@ if __name__ == '__main__':
             # 这会将转换的批处理数组转换为批处理数组的转换。
             batch = Transition(*zip(*transitions))
 
-            stateB = torch.tensor(batch.state)
+            stateB = torch.tensor(batch.state).to(dtype=torch.float32)
             actionB = torch.tensor(batch.action)
             rewardB = torch.tensor(batch.reward)
             # TODO: 目前没有确定终态，可以不设置终态，而通过判断loss低于阈值作为回合结束吗？
-            nextStateB = torch.tensor(batch.nextState)
+            nextStateB = torch.tensor(batch.nextState).to(dtype=torch.float32)
             
             # TODO: h_t, c_t初始化值确定
             h_t = Variable(torch.zeros(lstmLayers, batchSize, 2 * featNums))
