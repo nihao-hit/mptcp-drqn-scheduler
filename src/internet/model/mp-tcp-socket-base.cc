@@ -13,7 +13,6 @@
 #include <iomanip>
 #include <fstream>
 #include <cassert>
-#include <random>
 #include <cmath>
 #include <map>
 #include <tuple>
@@ -1950,21 +1949,19 @@ MpTcpSocketBase::drqnScheduler() {
   static const float epsStart = 0.9;
   static const float epsEnd = 0.05;
   static const float epsDecay = 200;
+  static Ptr<UniformRandomVariable> randomVariable = CreateObject<UniformRandomVariable>();
   static const vector<string> orderedState = {"s1IsAssoc", "s1WifiRate", "s1Snr", "s1Rtt", "s1UnAckPkts", "s1Retx", 
                                               "s2IsAssoc", "s2WifiRate", "s2Snr", "s2Rtt", "s2UnAckPkts", "s2Retx"};
 
   NS_LOG_FUNCTION(this);
   step++;
 
-  default_random_engine engine(Simulator::Now().GetDouble());
-  uniform_real_distribution<float> realDist(0.0, 1.0);
-  float sample = realDist(engine);
+  float sample = randomVariable->GetValue(0.0, 1.0);
   float epsThreshold = epsEnd + (epsStart - epsEnd) * exp(-1.0 * step / epsDecay);
   bool random = false;
 
   if((train && sample <= epsThreshold) || state.size() != lstmSeqLen) {
-    uniform_int_distribution<int> intDict(0, 1);
-    selectedSubflow = intDict(engine);
+    selectedSubflow = randomVariable->GetInteger(0, 1);
     random = true;
   } else {
     vector<double> stateVd; // vector可以转Tensor, vector vector仿佛不可以
