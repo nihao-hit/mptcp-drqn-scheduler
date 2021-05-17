@@ -155,6 +155,7 @@ private:
 public:
   Time dataIntervalUpper;
   Time dataIntervalLower;
+  EventId sendDataEvent;
 };
 
 } // namespace ns3

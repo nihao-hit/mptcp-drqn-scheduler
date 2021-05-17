@@ -219,6 +219,11 @@ void MpTcpBulkSendApplication::StopApplication (void) // Called at time specifie
     m_socket->epochId.Cancel();
   }
 
+  // cxxx: 退出时必须取消所有事件，否则仿真会被阻塞
+  if(sendDataEvent.IsRunning()){
+    sendDataEvent.Cancel();
+  }
+
   if (m_socket != 0)
     {
       m_socket->Close ();
@@ -279,7 +284,7 @@ void MpTcpBulkSendApplication::SendData (void)
     static Ptr<UniformRandomVariable> random = CreateObject<UniformRandomVariable> ();
     uint32_t dataInterval = random->GetInteger(dataIntervalLower.GetInteger(), 
                                                dataIntervalUpper.GetInteger());
-    Simulator::Schedule(Time(dataInterval), &MpTcpBulkSendApplication::SendData, this);
+    sendDataEvent = Simulator::Schedule(Time(dataInterval), &MpTcpBulkSendApplication::SendData, this);
   }
 }
 
