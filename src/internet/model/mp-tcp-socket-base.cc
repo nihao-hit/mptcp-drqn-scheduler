@@ -4494,8 +4494,15 @@ void MpTcpSocketBase::scheduleEpoch() {
       };
     }
 
-    uint32_t reward = -(s1Rtt * s1->rttTrace.second + s2Rtt * s2->rttTrace.second) / (s1->rttTrace.second + s2->rttTrace.second)
-                      - s1->retxTrace - s2->retxTrace;
+    // reward只计算最优子流，排除冗余调度的干扰，同时修复reward类型不能为uint32_t的bug，
+    // 以及(s1->rttTrace.second + s2->rttTrace.second)可能为0的bug
+    // TODO: 将丢包的负奖赏转换为周期内成功发送比例的正奖赏，成功发送比例需要排除冗余调度包干扰
+    int32_t reward = 0;
+    if(selectedSubflow == 0) {
+      reward = -(s1Rtt + s1->retxTrace);
+    } else {
+      reward = -(s2Rtt + s2->retxTrace);
+    }
     //   |________|________|
     //   t1       t2       t3
     //   a1
