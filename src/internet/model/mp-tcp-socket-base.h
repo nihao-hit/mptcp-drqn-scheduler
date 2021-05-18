@@ -8,6 +8,7 @@
 #define MP_TCP_SOCKET_BASE_H
 
 #include <memory>
+#include <tuple>
 
 #include "ns3/mp-tcp-typedefs.h"
 #include "ns3/tcp-socket-base.h"
@@ -326,6 +327,14 @@ public:
 
   void drqnScheduler();
   void scheduleEpoch();
+
+  // (int64_t timestamp, uint32_t localAddr, int64_t rtt, int64_t srtt)
+  vector<tuple<int64_t, uint32_t, int64_t, int64_t>> traceRtt;
+  // (int64_t timestamp, uint32_t localAddr, string type, uint64_t dataSeq, 
+  //  uint16_t dataLen, uint32_t subSeq, uint32_t subAck, uint32_t dupAckCnt)
+  vector<tuple<int64_t, uint32_t, string, uint64_t, 
+               uint16_t, uint32_t, uint32_t, uint32_t>> traceTx;
+  DataDistribAlgo_t GetDataDistribAlgo();
 };
 
 }   //namespace ns3

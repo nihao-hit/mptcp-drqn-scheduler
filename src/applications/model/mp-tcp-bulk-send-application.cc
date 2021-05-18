@@ -20,6 +20,8 @@
  * Modified by Morteza Kheikhah <m.kheirkhah@sussex.ac.uk>
  */
 
+#include "ns3/json.hpp"
+
 #include "ns3/log.h"
 #include "ns3/address.h"
 #include "ns3/node.h"
@@ -37,6 +39,7 @@
 #include "ns3/random-variable-stream.h"
 #include "scratch/topo.h"
 
+using json = nlohmann::ordered_json;
 
 NS_LOG_COMPONENT_DEFINE ("MpTcpBulkSendApplication");
 
@@ -209,6 +212,54 @@ void MpTcpBulkSendApplication::StartApplication (void) // Called at time specifi
     }
 }
 
+// tuple traceRtt -> nlohmann json
+void to_json(json& j, const tuple<int64_t, uint32_t, int64_t, int64_t>& t) {
+  j = json{
+    {"timestamp", get<0>(t)},
+    {"localAddr", get<1>(t)},
+    {"rtt", get<2>(t)},
+    {"srtt", get<3>(t)}
+  };
+}
+
+// nlohmann json -> tuple traceRtt
+void from_json(const json& j, tuple<int64_t, uint32_t, int64_t, int64_t>& t) {
+  auto& timestamp = j.at("timestamp");
+  auto& localAddr = j.at("localAddr");
+  auto& rtt = j.at("rtt");
+  auto& srtt = j.at("srtt");
+  t = make_tuple(timestamp, localAddr, rtt, srtt);
+}
+
+// tuple traceTx -> nlohmann json
+void to_json(json& j, const tuple<int64_t, uint32_t, string, uint64_t, 
+                                  uint16_t, uint32_t, uint32_t, uint32_t>& t) {
+  j = json{
+    {"timestamp", get<0>(t)},
+    {"localAddr", get<1>(t)},
+    {"type", get<2>(t)},
+    {"dataSeq", get<3>(t)},
+    {"dataLen", get<4>(t)},
+    {"subSeq", get<5>(t)},
+    {"subAck", get<6>(t)},
+    {"dupAckCnt", get<7>(t)}
+  };
+}
+
+// nlohmann json -> tuple traceTx
+void from_json(const json& j, tuple<int64_t, uint32_t, string, uint64_t, 
+                                    uint16_t, uint32_t, uint32_t, uint32_t>& t) {
+  auto& timestamp = j.at("timestamp");
+  auto& localAddr = j.at("localAddr");
+  auto& type = j.at("type");
+  auto& dataSeq = j.at("dataSeq");
+  auto& dataLen = j.at("dataLen");
+  auto& subSeq = j.at("subSeq");
+  auto& subAck = j.at("subAck");
+  auto& dupAckCnt = j.at("dupAckCnt");
+  t = make_tuple(timestamp, localAddr, type, dataSeq, dataLen, subSeq, subAck, dupAckCnt);
+}
+
 void MpTcpBulkSendApplication::StopApplication (void) // Called at time specified by Stop
 {
   NS_LOG_FUNCTION (this);
@@ -223,6 +274,32 @@ void MpTcpBulkSendApplication::StopApplication (void) // Called at time specifie
   if(sendDataEvent.IsRunning()){
     sendDataEvent.Cancel();
   }
+
+  // 调度算法性能trace保存
+  string scheName;
+  switch(m_socket->GetDataDistribAlgo()) {
+    case Round_Robin:
+      scheName = "RoundRobin";
+      break;
+    case DRQN:
+      scheName = "DRQN";
+      break;
+    case MinRtt:
+      scheName = "MinRtt";
+      break;
+    case Redundant:
+      scheName = "Redundant";
+      break;
+  }
+  string path = "/home/cx/Desktop";
+
+  json traceRttJson(m_socket->traceRtt);
+  ofstream traceRttOf(path + "/" + scheName + "-traceRtt.json");
+  traceRttOf<<traceRttJson.dump()<<endl;
+
+  json traceTxJson(m_socket->traceTx);
+  ofstream traceTxOf(path + "/" + scheName + "-traceTx.json");
+  traceTxOf<<traceTxJson.dump()<<endl;
 
   if (m_socket != 0)
     {

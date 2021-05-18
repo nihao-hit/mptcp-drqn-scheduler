@@ -17,7 +17,7 @@
 #include <map>
 #include <tuple>
 
-#include "json.hpp"
+#include "ns3/json.hpp"
 
 #include "ns3/abort.h"
 #include "ns3/log.h"
@@ -301,10 +301,18 @@ MpTcpSocketBase::EstimateRtt(uint8_t sFlowIdx, const TcpHeader& mptcpHeader)
 #endif
 
 #ifdef CXXX_TRACE
-  double meanRtt = sFlow->rttTrace.first;
-  uint32_t count = sFlow->rttTrace.second;
-  meanRtt = (meanRtt * count + sFlow->lastMeasuredRtt.GetDouble()) / ++count;
-  sFlow->rttTrace = make_pair(meanRtt, count);
+  // cxxx: md，我就说怎么在DoForwardUp()直接就调用了EstimateRtt()，原来采样函数自己处理失败
+  // 这里trace采样成功的RTT
+  int64_t rtt = sFlow->lastMeasuredRtt.GetInteger();
+  if(rtt != 0) {
+    double meanRtt = sFlow->rttTrace.first;
+    uint32_t count = sFlow->rttTrace.second;
+    meanRtt = (meanRtt * count + rtt) / ++count;
+    sFlow->rttTrace = make_pair(meanRtt, count);
+
+    traceRtt.push_back(make_tuple(Simulator::Now().GetInteger(), sFlow->sAddr.Get(), 
+        rtt, sFlow->rtt->GetCurrentEstimate().GetInteger()));
+  }
 #endif
 }
 
@@ -1265,13 +1273,19 @@ MpTcpSocketBase::SendDataPacket(uint8_t sFlowIdx, uint32_t size, bool withAck, u
 
   NS_LOG_LOGIC(Simulator::Now().GetSeconds() << " ["<< m_node->GetId()<< "] SendDataPacket->  " << header <<" dSize: " << packetSize<< " sFlow: " << sFlow->routeId);
   // cxxx: 发包详细日志
+  string packetType = guard ? "retransmission" : ((dataSeq == -1) ? "data" : "redundant");
+  uint64_t packetDataSeq = guard ? ptrDSN->dataSeqNumber : ((dataSeq == -1) ? nextTxSequence : dataSeq);
   NS_LOG_DEBUG(Simulator::Now()<<" Sent a Packet: subflowIdx="<<(uint32_t)sFlowIdx
                                <<", localAddr="<<sFlow->sAddr<<", remoteAddr="<<sFlow->dAddr
                                <<", subSeq="<<sFlow->TxSeqNumber<<", subAck="<<sFlow->RxSeqNumber
-                               <<", dataSeq="<<(guard ? ptrDSN->dataSeqNumber : ((dataSeq == -1) ? nextTxSequence : dataSeq))
-                               <<", dataLength="<<packetSize<<", type="<<(guard ? "timeout-retransmission" : ((dataSeq == -1) ? "data" : "redundant"))
+                               <<", dataSeq="<<packetDataSeq
+                               <<", dataLength="<<packetSize<<", type="<<packetType
                                <<", m_inFastRec="<<sFlow->m_inFastRec<<", m_dupAckCount="<<sFlow->m_dupAckCount);
-
+#ifdef CXXX_TRACE
+  traceTx.push_back(make_tuple(Simulator::Now().GetInteger(), sFlow->sAddr.Get(), packetType, 
+                               packetDataSeq, packetSize, 
+                               sFlow->TxSeqNumber, sFlow->RxSeqNumber, 0));
+#endif
   // Do some updates.....
   sFlow->rtt->SentSeq(SequenceNumber32(sFlow->TxSeqNumber), packetSize); // Notify the RTT of a data packet sent
   sFlow->TxSeqNumber += packetSize; // Update subflow's nextSeqNum to send.
@@ -1444,6 +1458,9 @@ MpTcpSocketBase::DoRetransmit(uint8_t sFlowIdx)
 
 #ifdef CXXX_TRACE
   sFlow->retxTrace++;
+
+  traceTx.push_back(make_tuple(Simulator::Now().GetInteger(), sFlow->sAddr.Get(), "Timeout", ptrDSN->dataSeqNumber,
+                                 ptrDSN->dataLevelLength, ptrDSN->subflowSeqNumber, ptrDSN->acknowledgement, ptrDSN->dupAckCount));
 #endif
 
   //TxBytes += ptrDSN->dataLevelLength + 62;
@@ -1511,6 +1528,9 @@ MpTcpSocketBase::DoRetransmit(uint8_t sFlowIdx, DSNMapping* ptrDSN)
 
 #ifdef CXXX_TRACE
   sFlow->retxTrace++;
+
+  traceTx.push_back(make_tuple(Simulator::Now().GetInteger(), sFlow->sAddr.Get(), "Fast retransmission or Fast recovery", ptrDSN->dataSeqNumber,
+                                 ptrDSN->dataLevelLength, ptrDSN->subflowSeqNumber, ptrDSN->acknowledgement, ptrDSN->dupAckCount));
 #endif
 
   //TxBytes += ptrDSN->dataLevelLength + 62;
@@ -4258,6 +4278,12 @@ void
 MpTcpSocketBase::SetDataDistribAlgo(DataDistribAlgo_t ddalgo)
 {
   distribAlgo = ddalgo;
+}
+
+DataDistribAlgo_t
+MpTcpSocketBase::GetDataDistribAlgo()
+{
+  return distribAlgo;
 }
 
 void
