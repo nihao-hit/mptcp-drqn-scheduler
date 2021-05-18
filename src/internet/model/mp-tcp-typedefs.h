@@ -48,7 +48,9 @@ typedef enum
 typedef enum
 {
   Round_Robin,
-  DRQN
+  DRQN,
+  MinRtt,
+  Redundant
 } DataDistribAlgo_t;
 
 typedef enum

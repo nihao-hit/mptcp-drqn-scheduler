@@ -71,7 +71,9 @@ MpTcpSocketBase::GetTypeId(void)
           EnumValue(DRQN),
           MakeEnumAccessor(&MpTcpSocketBase::SetDataDistribAlgo),
           MakeEnumChecker(Round_Robin, "Round_Robin",
-                          DRQN, "DRQN"))
+                          DRQN, "DRQN",
+                          MinRtt, "MinRtt",
+                          Redundant, "Redundant"))
 
       .AddAttribute("PathManagement",
                      "Mechanism for establishing new sub-flows",
@@ -1920,21 +1922,38 @@ MpTcpSocketBase::SendPendingData(uint8_t sFlowIdx)
         } // end of if statement
 
         // cxxx: 如果amountSent==0，证明最优子流此时正在重传包，此时不进行冗余调度
-        if(amountSent != 0) {
-          for(uint32_t i = 0; i < subflows.size(); i++) {
-            Ptr<MpTcpSubFlow> other = subflows[i];
-            if(i != lastUsedsFlowIdx && other->srttExpired < Simulator::Now() && other->state == ESTABLISHED) {
-              NS_LOG_DEBUG(Simulator::Now()<<" DRQN schedule redundant packet on subflowIdx="<<i
-                                          <<", rdnId="<<other->rdnCnt
-                                          <<", SRTT="<<sFlow->rtt->GetCurrentEstimate()
-                                          <<", RTO="<<sFlow->rtt->RetransmitTimeout());
-              other->rdnCnt++;
-              SendDataPacket(i, amountSent, false, nextTxSequence - amountSent);
-              // cxxx: 重置SRTT过期时间
-              sFlow->srttExpired = Simulator::Now() + sFlow->rtt->GetCurrentEstimate();
+        switch(distribAlgo) {
+          case DRQN:
+            if(amountSent != 0) {
+              for(uint32_t i = 0; i < subflows.size(); i++) {
+                Ptr<MpTcpSubFlow> other = subflows[i];
+                if(i != lastUsedsFlowIdx && other->srttExpired < Simulator::Now() && other->state == ESTABLISHED) {
+                  NS_LOG_DEBUG(Simulator::Now()<<" DRQN schedule redundant packet on subflowIdx="<<i
+                                              <<", rdnId="<<other->rdnCnt
+                                              <<", SRTT="<<sFlow->rtt->GetCurrentEstimate()
+                                              <<", RTO="<<sFlow->rtt->RetransmitTimeout());
+                  other->rdnCnt++;
+                  SendDataPacket(i, amountSent, false, nextTxSequence - amountSent);
+                  // cxxx: 重置SRTT过期时间
+                  sFlow->srttExpired = Simulator::Now() + sFlow->rtt->GetCurrentEstimate();
+                }
+              }
             }
-          }
+            break;
+          case Redundant:
+            if(amountSent != 0) {
+              for(uint32_t i = 0; i < subflows.size(); i++) {
+                Ptr<MpTcpSubFlow> other = subflows[i];
+                if(i != lastUsedsFlowIdx && other->state == ESTABLISHED) {
+                  SendDataPacket(i, amountSent, false, nextTxSequence - amountSent);
+                }
+              }
+            }
+            break;
+          default:
+            break;
         }
+        
       // lastUsedsFlowIdx = getSubflowToUse();
     } // end of main while loop
   //NS_LOG_UNCOND ("["<< m_node->GetId() << "] SendPendingData -> amount data sent = " << nOctetsSent << "... Notify application.");
@@ -1999,6 +2018,15 @@ MpTcpSocketBase::getSubflowToUse()
     break;
   case DRQN:
     nextSubFlow = selectedSubflow;
+    break;
+  case MinRtt:
+    nextSubFlow = 0;
+    for(uint32_t i = 1; i < subflows.size(); i++) {
+      if(subflows[i]->rtt->GetCurrentEstimate() < subflows[nextSubFlow]->rtt->GetCurrentEstimate()){
+        nextSubFlow = i;
+      }
+    }
+    break;
   default:
     break;
     }

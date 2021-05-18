@@ -217,6 +217,7 @@ int main(int argc, char *argv[])
     Config::SetDefault("ns3::MpTcpSocketBase::ModelPath", StringValue("/home/cx/Desktop/drqn.pt"));
     Config::SetDefault("ns3::MpTcpSocketBase::LstmLayers", UintegerValue(2));
     Config::SetDefault("ns3::MpTcpSocketBase::FeatNums", UintegerValue(12));
+    Config::SetDefault("ns3::MpTcpSocketBase::SchedulingAlgorithm", EnumValue(DRQN));
 
     // TODO: 模拟thin stream的应用层数据传输间隔设置还需要探究
     Config::SetDefault("ns3::MpTcpBulkSendApplication::DataIntervalUpper", TimeValue(MilliSeconds(200)));
