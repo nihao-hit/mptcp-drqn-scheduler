@@ -310,8 +310,16 @@ MpTcpSocketBase::EstimateRtt(uint8_t sFlowIdx, const TcpHeader& mptcpHeader)
     meanRtt = (meanRtt * count + rtt) / ++count;
     sFlow->rttTrace = make_pair(meanRtt, count);
 
+    // EstimateRtt()调用在解包前，因此通过包首部subAck搜索subflow未确认包队列，
+    // 最终追溯到dataAck。
+    uint64_t dataAck = 0;
+    for(auto iter = sFlow->mapDSN.begin(); iter != sFlow->mapDSN.end(); iter++) {
+      if((*iter)->subflowSeqNumber + (*iter)->dataLevelLength == mptcpHeader.GetAckNumber().GetValue()) {
+        dataAck = (*iter)->dataSeqNumber + (*iter)->dataLevelLength;
+      }
+    }
     traceRtt.push_back(make_tuple(Simulator::Now().GetInteger(), sFlow->sAddr.Get(), 
-        rtt, sFlow->rtt->GetCurrentEstimate().GetInteger()));
+        rtt, sFlow->rtt->GetCurrentEstimate().GetInteger(), dataAck));
   }
 #endif
 }

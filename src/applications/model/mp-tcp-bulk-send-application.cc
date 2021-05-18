@@ -213,22 +213,24 @@ void MpTcpBulkSendApplication::StartApplication (void) // Called at time specifi
 }
 
 // tuple traceRtt -> nlohmann json
-void to_json(json& j, const tuple<int64_t, uint32_t, int64_t, int64_t>& t) {
+void to_json(json& j, const tuple<int64_t, uint32_t, int64_t, int64_t, uint64_t>& t) {
   j = json{
     {"timestamp", get<0>(t)},
     {"localAddr", get<1>(t)},
     {"rtt", get<2>(t)},
-    {"srtt", get<3>(t)}
+    {"srtt", get<3>(t)},
+    {"dataAck", get<4>(t)}
   };
 }
 
 // nlohmann json -> tuple traceRtt
-void from_json(const json& j, tuple<int64_t, uint32_t, int64_t, int64_t>& t) {
+void from_json(const json& j, tuple<int64_t, uint32_t, int64_t, int64_t, uint64_t>& t) {
   auto& timestamp = j.at("timestamp");
   auto& localAddr = j.at("localAddr");
   auto& rtt = j.at("rtt");
   auto& srtt = j.at("srtt");
-  t = make_tuple(timestamp, localAddr, rtt, srtt);
+  auto& dataAck = j.at("dataAck");
+  t = make_tuple(timestamp, localAddr, rtt, srtt, dataAck);
 }
 
 // tuple traceTx -> nlohmann json
