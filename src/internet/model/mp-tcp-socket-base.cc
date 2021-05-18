@@ -4448,8 +4448,10 @@ void MpTcpSocketBase::scheduleEpoch() {
   if(subflows.size() == 2) {
     Ptr<MpTcpSubFlow> s1 = subflows[0];
     Ptr<MpTcpSubFlow> s2 = subflows[1];
-    uint32_t s1Rtt = s1->rttTrace.first / 1e6; // ms
-    uint32_t s2Rtt = s2->rttTrace.first / 1e6; // ms
+    // TODO: 现有wifi delay太小，出现了RTT不足1ms的情况，且降低传播速度几乎没效果，
+    // workaround：RTT×10
+    uint32_t s1Rtt = s1->rttTrace.first / 1e5; // ms
+    uint32_t s2Rtt = s2->rttTrace.first / 1e5; // ms
     NS_ASSERT(sub1IsSsid != 0);
     json nextState;
     if(sub1IsSsid == 1) {

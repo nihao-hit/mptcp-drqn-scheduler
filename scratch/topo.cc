@@ -199,6 +199,7 @@ int main(int argc, char *argv[])
 
     // Set the maximum wireless range to 30 meters
     Config::SetDefault("ns3::RangePropagationLossModel::MaxRange", DoubleValue(30));
+    Config::SetDefault("ns3::ConstantSpeedPropagationDelayModel::Speed", DoubleValue(3e8));
 
     // TODO: 不知道为什么，ssid1与ssid2在每一秒都会发生一次漫游，不论如何降低速度。
     // 配置移动模型
