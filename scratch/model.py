@@ -97,64 +97,60 @@ if __name__ == '__main__':
 
     ################################################################################
     # 训练
-    episodes = 1000
     batchSize = 128
-    gamma = 0.999
-    memoryUpdate = 500
-    # targetUpdate = 10
+    gamma = 0.99
+    memoryUpdate = 100
 
-    for i in range(episodes):
-        for j in count():
-            if j % memoryUpdate == 0: # 回合中每训练memoryUpdate次更新一次ReplayMemory
-                memory.read()
-            if len(memory) < batchSize:
-                continue
-            transitions = memory.sample(batchSize)
-            # 转置批样本(有关详细说明，请参阅https://stackoverflow.com/a/19343/3343043）。
-            # 这会将转换的批处理数组转换为批处理数组的转换。
-            batch = Transition(*zip(*transitions))
+    for j in count():
+        if j % memoryUpdate == 0: # 回合中每训练memoryUpdate次更新一次ReplayMemory
+            memory.read()
+        if len(memory) < batchSize:
+            continue
+        transitions = memory.sample(batchSize)
+        # 转置批样本(有关详细说明，请参阅https://stackoverflow.com/a/19343/3343043）。
+        # 这会将转换的批处理数组转换为批处理数组的转换。
+        batch = Transition(*zip(*transitions))
 
-            stateB = torch.tensor(batch.state).to(dtype=torch.float32)
-            actionB = torch.tensor(batch.action)
-            rewardB = torch.tensor(batch.reward)
-            # TODO: 目前没有确定终态，可以不设置终态，而通过判断loss低于阈值作为回合结束吗？
-            nextStateB = torch.tensor(batch.nextState).to(dtype=torch.float32)
-            
-            # TODO: h_t, c_t初始化值确定
-            h_t = Variable(torch.zeros(lstmLayers, batchSize, 2 * featNums))
-            c_t = Variable(torch.zeros(lstmLayers, batchSize, 2 * featNums))
-            # 计算Q(s_t, a)-模型计算 Q(s_t)，然后选择所采取行动的列。这些是根据策略网络对每个批处理状态所采取的操作。
-            # TODO: policy网络返回的h_t, c_t需要传给target网络吗？
-            policyAction, _, _ = policyNet(stateB, h_t, c_t)
-            policyQvalue = policyAction.gather(1, actionB.unsqueeze(1))
+        stateB = torch.tensor(batch.state).to(dtype=torch.float32)
+        actionB = torch.tensor(batch.action)
+        rewardB = torch.tensor(batch.reward)
+        # TODO: 目前没有确定终态，可以不设置终态，而通过判断loss低于阈值作为回合结束吗？
+        nextStateB = torch.tensor(batch.nextState).to(dtype=torch.float32)
+        
+        # TODO: h_t, c_t初始化值确定
+        h_t = Variable(torch.zeros(lstmLayers, batchSize, 2 * featNums))
+        c_t = Variable(torch.zeros(lstmLayers, batchSize, 2 * featNums))
+        # 计算Q(s_t, a)-模型计算 Q(s_t)，然后选择所采取行动的列。这些是根据策略网络对每个批处理状态所采取的操作。
+        # TODO: policy网络返回的h_t, c_t需要传给target网络吗？
+        policyAction, _, _ = policyNet(stateB, h_t, c_t)
+        policyQvalue = policyAction.gather(1, actionB.unsqueeze(1))
 
-            # 计算下一个状态的V(s_{t+1})。非最终状态下一个状态的预期操作值是基于“旧”目标网络计算的；
-            # 选择max(1)[0]的最佳奖励。这是基于掩码合并的，这样当状态为最终状态时，我们将获得预期状态值或0。
-            nextStateQvalue, _, _ = targetNet(nextStateB, h_t, c_t)
-            nextStateQvalue = nextStateQvalue.max(1)[0].detach()
-            # 计算期望 Q 值
-            expectedQvalue = (nextStateQvalue * gamma) + rewardB
+        # 计算下一个状态的V(s_{t+1})。非最终状态下一个状态的预期操作值是基于“旧”目标网络计算的；
+        # 选择max(1)[0]的最佳奖励。这是基于掩码合并的，这样当状态为最终状态时，我们将获得预期状态值或0。
+        nextStateQvalue, _, _ = targetNet(nextStateB, h_t, c_t)
+        nextStateQvalue = nextStateQvalue.max(1)[0].detach()
+        # 计算期望 Q 值
+        expectedQvalue = (nextStateQvalue * gamma) + rewardB
 
-            # # 计算 Huber 损失
-            # loss = F.smooth_l1_loss(policyQvalue, expectedQvalue.unsqueeze(1))
-            # 计算均方误差
-            loss = F.mse_loss(policyQvalue, expectedQvalue.unsqueeze(1))
-            
-            # 优化模型
-            optimizer.zero_grad()
-            loss.backward()
-            # TODO: clamp()避免参数出现inf，这步操作是不是必要的？
-            for param in policyNet.parameters():
-                param.grad.data.clamp_(-1, 1)
-            optimizer.step()
+        # # 计算 Huber 损失
+        # loss = F.smooth_l1_loss(policyQvalue, expectedQvalue.unsqueeze(1))
+        # 计算均方误差
+        loss = F.mse_loss(policyQvalue, expectedQvalue.unsqueeze(1))
+        
+        # 优化模型
+        optimizer.zero_grad()
+        loss.backward()
+        # TODO: clamp()避免参数出现inf，这步操作是不是必要的？
+        for param in policyNet.parameters():
+            param.grad.data.clamp_(-1, 1)
+        optimizer.step()
 
-            if j % 100 == 0:
-                print('j={}, loss={:.5f}'.format(j, loss.item()))
-            # 判断loss低于阈值作为终态
-            if j == 1000:
-                break
-        #每回合结束后更新目标网络, 复制在DQN中的所有权重偏差
-        targetNet.load_state_dict(policyNet.state_dict())
+        if j % 100 == 0:
+            print('j={}, loss={:.5f}'.format(j, loss.item()))
+        # TODO: 判断loss低于阈值作为终态
+        # 软更新targetNet
+        for policyParam, targetParam in zip(policyNet.parameters(), targetNet.parameters()):
+            targetParam.data.copy_(lr * policyParam.data + (1 - lr) * targetParam.data)
 
         # 序列化targetNet
         input = torch.rand(batchSize, lstmSeqLen, featNums)
