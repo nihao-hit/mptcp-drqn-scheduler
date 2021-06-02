@@ -588,13 +588,13 @@ int main(int argc, char *argv[])
     // 注意：测试发现ns3执行sta依次关联ssid1,ssid2基站事件分别发生在<1ms，1.5ms时刻，
     // 而mptcp只在主流三次握手期间尝试建立所有子流，因此延迟mptcp流量发送事件。
     sendApp.Start(Seconds(5.0));
-    sendApp.Stop(Seconds(10.0));
+    sendApp.Stop(Seconds(250.0));
 
     MpTcpPacketSinkHelper rcvHelper("ns3::TcpSocketFactory", InetSocketAddress(Ipv4Address::GetAny(), port));
     ApplicationContainer rcvApp = rcvHelper.Install(server);
 
     rcvApp.Start(Seconds(4.0));
-    rcvApp.Stop(Seconds(11.0));
+    rcvApp.Stop(Seconds(251.0));
     // 设置应用层流量
     ////////////////////////////////////////////////////////////////////////////////
 
@@ -617,7 +617,7 @@ int main(int argc, char *argv[])
     // trace
     ////////////////////////////////////////////////////////////////////////////////
 
-    Simulator::Stop(Seconds(15.0));
+    Simulator::Stop(Seconds(255.0));
     Simulator::Run();
     Simulator::Destroy();
 
