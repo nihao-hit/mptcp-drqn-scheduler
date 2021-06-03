@@ -344,7 +344,8 @@ void MpTcpBulkSendApplication::SendData (void)
       toSend = std::min(m_sendSize, m_maxBytes - m_totBytes);
     }
   //while (m_totBytes < m_maxBytes && m_socket->GetTxAvailable())
-  while(toSend != 0)
+  // while(toSend != 0) // 连续丢包状态下，sendingBuffer渐渐被填满，触发死循环bug
+  if(toSend != 0)
     { // Time to send more new data into MPTCP socket buffer
           //toSend = std::min(toSend, m_bufferSize);
           //int actual = m_socket->FillBuffer(&m_data[toSend], toSend); // TODO Change m_totalBytes to toSend

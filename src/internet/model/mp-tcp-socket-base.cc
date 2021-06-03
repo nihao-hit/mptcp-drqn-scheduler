@@ -1190,7 +1190,7 @@ MpTcpSocketBase::SendDataPacket(uint8_t sFlowIdx, uint32_t size, bool withAck, u
           return 0;
         }
     }
-  NS_ASSERT(packetSize <= size);
+  // NS_ASSERT(packetSize <= size); // 重传包大小packetSize可能超过size
   NS_ASSERT(packetSize == p->GetSize());
 
   // This is data packet, so its TCP_Flag should be 0
