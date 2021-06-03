@@ -190,6 +190,8 @@ private:
 
   TracedCallback<Mac48Address> m_assocLogger;
   TracedCallback<Mac48Address> m_deAssocLogger;
+
+  double assocMiss;
 };
 
 } // namespace ns3

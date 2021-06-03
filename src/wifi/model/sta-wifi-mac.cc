@@ -27,6 +27,8 @@
 #include "ns3/pointer.h"
 #include "ns3/boolean.h"
 #include "ns3/trace-source-accessor.h"
+#include "ns3/double.h"
+#include "ns3/random-variable-stream.h"
 
 #include "qos-tag.h"
 #include "mac-low.h"
@@ -91,6 +93,10 @@ StaWifiMac::GetTypeId (void)
                      MakeTraceSourceAccessor (&StaWifiMac::m_assocLogger))
     .AddTraceSource ("DeAssoc", "Association with an access point lost.",
                      MakeTraceSourceAccessor (&StaWifiMac::m_deAssocLogger))
+    .AddAttribute ("AssocMiss", "If random(0, 1) < AssocMiss, SendAssociationRequest() do nothing",
+                   DoubleValue (0.5),
+                   MakeDoubleAccessor (&StaWifiMac::assocMiss),
+                   MakeDoubleChecker<double>())
   ;
   return tid;
 }
@@ -219,7 +225,12 @@ StaWifiMac::SendAssociationRequest (void)
   // frames if we are a QoS AP. The approach taken here is to always
   // use the DCF for these regardless of whether we have a QoS
   // association or not.
-  m_dca->Queue (packet, hdr);
+  // cxxx: 让SendAssociationRequest()以一定概率失败，模拟漫游延迟
+  static Ptr<UniformRandomVariable> randomVariable = CreateObject<UniformRandomVariable>();
+  float sample = randomVariable->GetValue(0.0, 1.0);
+  if(sample > assocMiss) {
+    m_dca->Queue (packet, hdr);
+  }
 
   if (m_assocRequestEvent.IsRunning ())
     {

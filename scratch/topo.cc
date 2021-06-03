@@ -49,7 +49,7 @@ printStaMoveStatus() {
     of<<Simulator::Now().GetInteger()<<","<<posX<<","<<posY<<","
             <<ssid1IsAssoc<<","<<ssid1WifiRate<<","<<ssid1Snr<<","
             <<ssid2IsAssoc<<","<<ssid2WifiRate<<","<<ssid2Snr<<endl;
-    Simulator::Schedule(MilliSeconds(500), &printStaMoveStatus);
+    Simulator::Schedule(MilliSeconds(10), &printStaMoveStatus);
 }
 
 // TODO: 不知道为什么，CourseChange()并没有被触发？
@@ -207,6 +207,11 @@ int main(int argc, char *argv[])
     Config::SetDefault ("ns3::RandomWalk2dMobilityModel::Time", StringValue ("15s"));
     Config::SetDefault ("ns3::RandomWalk2dMobilityModel::Speed", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=2.0]"));
     Config::SetDefault ("ns3::RandomWalk2dMobilityModel::Bounds", StringValue ("0|120|0|120"));
+
+    // 配置SendAssociationRequest()失败概率，模拟随机漫游延迟
+    // 若random(0, 1) < AssocMiss，此函数什么也不做，等待AssocRequestTimeout后重试
+    Config::SetDefault ("ns3::StaWifiMac::AssocMiss", DoubleValue (0.8));
+    Config::SetDefault ("ns3::StaWifiMac::AssocRequestTimeout", TimeValue (Seconds (0.1)));
     
     // 配置mptcp
     Config::SetDefault("ns3::MpTcpSocketBase::Epoch", TimeValue(MilliSeconds(200)));
@@ -613,7 +618,7 @@ int main(int argc, char *argv[])
     phy2.EnablePcap("MptcpDrqnSchedulerTopo", ssid2StaDevice);
     csma.EnablePcap("MptcpDrqnSchedulerTopo", lan3Devices.Get(1));
 
-    Simulator::Schedule(MilliSeconds(500), &printStaMoveStatus);
+    Simulator::Schedule(MilliSeconds(10), &printStaMoveStatus);
     // trace
     ////////////////////////////////////////////////////////////////////////////////
 
