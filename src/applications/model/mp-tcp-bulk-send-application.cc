@@ -374,14 +374,16 @@ void MpTcpBulkSendApplication::ConnectionSucceeded (Ptr<Socket> socket)
   NS_LOG_LOGIC ("MpTcpBulkSendApplication Connection succeeded");
   m_connected = true;
 
-  // cxxx: 确认ssid与subflow对应关系
-  if(m_socket->m_localAddress == Ipv4Address("10.0.1.1")) {
-    sub1IsSsid = 1;
-  } else {
-    sub1IsSsid = 2;
+  if(m_socket->GetDataDistribAlgo() == DRQN) {
+    // cxxx: 确认ssid与subflow对应关系
+    if(m_socket->m_localAddress == Ipv4Address("10.0.1.1")) {
+      sub1IsSsid = 1;
+    } else {
+      sub1IsSsid = 2;
+    }
+    // cxxx: 在应用启动连接建立后调度经验元组采集函数
+    m_socket->epochId = Simulator::ScheduleNow(&MpTcpSocketBase::scheduleEpoch, m_socket);
   }
-  // cxxx: 在应用启动连接建立后调度经验元组采集函数
-  m_socket->epochId = Simulator::ScheduleNow(&MpTcpSocketBase::scheduleEpoch, m_socket);
 
   // cxxx: 只保留该SendData()一个入口，关闭DataSend()回调入口，StartApplication()入口理论上不可能成立
   //
